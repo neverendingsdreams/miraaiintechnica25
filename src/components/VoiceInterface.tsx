@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import { useConversation } from '@11labs/react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Mic, MicOff, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -11,119 +10,219 @@ interface VoiceInterfaceProps {
 
 const VoiceInterface = ({ onSpeakingChange }: VoiceInterfaceProps) => {
   const { toast } = useToast();
-  const [isConnecting, setIsConnecting] = useState(false);
-
-  const conversation = useConversation({
-    onConnect: () => {
-      console.log('Voice conversation connected');
-      toast({
-        title: "Connected!",
-        description: "Mira is ready to chat. Start talking!",
-      });
-    },
-    onDisconnect: () => {
-      console.log('Voice conversation disconnected');
-      onSpeakingChange(false);
-    },
-    onMessage: (message) => {
-      console.log('Received message:', message);
-    },
-    onError: (error) => {
-      console.error('Conversation error:', error);
-      toast({
-        title: "Connection Error",
-        description: "Failed to connect to Mira. Please try again.",
-        variant: "destructive"
-      });
-      setIsConnecting(false);
-    },
-  });
+  const [isListening, setIsListening] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const recognitionRef = useRef<any>(null);
+  const synthRef = useRef<SpeechSynthesis | null>(null);
 
   useEffect(() => {
-    onSpeakingChange(conversation.isSpeaking);
-  }, [conversation.isSpeaking, onSpeakingChange]);
+    // Initialize Web Speech API
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = 'en-US';
 
-  const startConversation = async () => {
-    setIsConnecting(true);
+      recognitionRef.current.onresult = async (event: any) => {
+        const speechResult = event.results[0][0].transcript;
+        console.log('User said:', speechResult);
+        setTranscript(speechResult);
+        setIsListening(false);
+        
+        // Process with AI
+        await processUserInput(speechResult);
+      };
+
+      recognitionRef.current.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        setIsListening(false);
+        
+        if (event.error === 'no-speech') {
+          toast({
+            title: "No speech detected",
+            description: "Please try speaking again.",
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: "Failed to recognize speech. Please try again.",
+            variant: "destructive"
+          });
+        }
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+      };
+    }
+
+    synthRef.current = window.speechSynthesis;
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      if (synthRef.current) {
+        synthRef.current.cancel();
+      }
+    };
+  }, []);
+
+  const processUserInput = async (text: string) => {
+    setIsProcessing(true);
     
     try {
-      // Request microphone permission first
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      // Get signed URL from our edge function
-      const { data, error } = await supabase.functions.invoke('elevenlabs-session');
-
-      if (error) throw error;
-      
-      if (!data.signed_url) {
-        throw new Error('No signed URL received');
-      }
-
-      // Start the conversation with the signed URL
-      await conversation.startSession({
-        signedUrl: data.signed_url,
+      // Call edge function for AI response
+      const { data, error } = await supabase.functions.invoke('voice-chat', {
+        body: { text }
       });
 
-      setIsConnecting(false);
+      if (error) throw error;
+
+      const responseText = data.text;
+      console.log('Mira says:', responseText);
+
+      // Speak the response
+      if (synthRef.current && responseText) {
+        onSpeakingChange(true);
+        
+        const utterance = new SpeechSynthesisUtterance(responseText);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+        
+        // Try to use a female voice
+        const voices = synthRef.current.getVoices();
+        const femaleVoice = voices.find(voice => 
+          voice.name.includes('Female') || 
+          voice.name.includes('Samantha') ||
+          voice.name.includes('Karen') ||
+          voice.name.includes('Moira')
+        );
+        if (femaleVoice) {
+          utterance.voice = femaleVoice;
+        }
+
+        utterance.onend = () => {
+          onSpeakingChange(false);
+          setIsProcessing(false);
+        };
+
+        utterance.onerror = () => {
+          onSpeakingChange(false);
+          setIsProcessing(false);
+          toast({
+            title: "Playback Error",
+            description: "Failed to speak response.",
+            variant: "destructive"
+          });
+        };
+
+        synthRef.current.speak(utterance);
+      } else {
+        setIsProcessing(false);
+      }
     } catch (error: any) {
-      console.error('Error starting conversation:', error);
-      setIsConnecting(false);
+      console.error('Error processing input:', error);
+      setIsProcessing(false);
+      onSpeakingChange(false);
       
-      let errorMessage = "Failed to start voice conversation.";
+      toast({
+        title: "Error",
+        description: error.message || "Failed to get response from Mira.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const startListening = async () => {
+    if (!recognitionRef.current) {
+      toast({
+        title: "Not Supported",
+        description: "Speech recognition is not supported in your browser.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      // Request microphone permission
+      await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-        errorMessage = "Microphone access denied. Please allow microphone access to chat with Mira.";
+      setIsListening(true);
+      setTranscript('');
+      recognitionRef.current.start();
+      
+      toast({
+        title: "Listening...",
+        description: "Speak your fashion question!",
+      });
+    } catch (error: any) {
+      console.error('Error starting recognition:', error);
+      
+      let errorMessage = "Failed to start listening.";
+      if (error.name === 'NotAllowedError') {
+        errorMessage = "Microphone access denied. Please allow microphone access.";
       }
       
       toast({
-        title: "Connection Failed",
+        title: "Error",
         description: errorMessage,
         variant: "destructive"
       });
     }
   };
 
-  const endConversation = async () => {
-    await conversation.endSession();
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+    if (synthRef.current) {
+      synthRef.current.cancel();
+    }
+    setIsListening(false);
+    setIsProcessing(false);
+    onSpeakingChange(false);
   };
 
   return (
     <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50">
-      {conversation.status === 'disconnected' ? (
+      {!isListening && !isProcessing ? (
         <Button
-          onClick={startConversation}
-          disabled={isConnecting}
+          onClick={startListening}
           size="lg"
           className="rounded-full px-8 py-6 shadow-elegant hover:shadow-glow transition-all duration-300 bg-gradient-fashion hover:scale-105"
         >
-          {isConnecting ? (
-            <>
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              Connecting...
-            </>
-          ) : (
-            <>
-              <Mic className="mr-2 h-5 w-5" />
-              Talk to Mira
-            </>
-          )}
+          <Mic className="mr-2 h-5 w-5" />
+          Talk to Mira
         </Button>
       ) : (
         <div className="flex flex-col items-center gap-2">
-          <div className={`rounded-full p-4 ${conversation.isSpeaking ? 'bg-accent animate-pulse' : 'bg-muted'} transition-all duration-300`}>
-            <Mic className="h-8 w-8 text-accent-foreground" />
+          <div className={`rounded-full p-4 ${isListening ? 'bg-red-500/20 animate-pulse' : 'bg-accent'} transition-all duration-300`}>
+            {isProcessing ? (
+              <Loader2 className="h-8 w-8 text-accent-foreground animate-spin" />
+            ) : (
+              <Mic className="h-8 w-8 text-accent-foreground" />
+            )}
           </div>
-          <p className="text-sm text-muted-foreground">
-            {conversation.isSpeaking ? 'Mira is speaking...' : 'Listening...'}
+          <p className="text-sm text-muted-foreground text-center max-w-xs">
+            {isListening ? 'Listening...' : isProcessing ? 'Mira is thinking...' : 'Processing...'}
           </p>
+          {transcript && (
+            <p className="text-xs text-muted-foreground text-center max-w-xs italic">
+              "{transcript}"
+            </p>
+          )}
           <Button
-            onClick={endConversation}
+            onClick={stopListening}
             variant="secondary"
             size="sm"
             className="mt-2"
           >
             <MicOff className="mr-2 h-4 w-4" />
-            End Chat
+            Stop
           </Button>
         </div>
       )}
