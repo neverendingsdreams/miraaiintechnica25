@@ -31,8 +31,32 @@ const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps)
         console.log('User said:', speechResult);
         setTranscript(speechResult);
         setIsListening(false);
+
+        // Local keyword fallback to open camera immediately
+        const lower = (speechResult || '').toLowerCase();
+        const cameraPhrases = [
+          /\bsee (my|me) outfit\b/,
+          /\bopen (the )?camera\b/,
+          /\bshow (me )?camera\b/,
+          /\b(analyze|analyse|check|look at) (my|this) outfit\b/,
+          /\bsee my look\b/,
+          /\bcheck my look\b/,
+          /\bcamera\b.*\boutfit\b/,
+        ];
+        if (cameraPhrases.some((r) => r.test(lower))) {
+          try {
+            // Speak confirmation then open camera
+            if (synthRef.current) {
+              const u = new SpeechSynthesisUtterance("Opening the camera. Stand about 2 steps back so I can see your outfit.");
+              synthRef.current.cancel();
+              synthRef.current.speak(u);
+            }
+          } catch {}
+          onShowCamera();
+          return;
+        }
         
-        // Process with AI
+        // Otherwise, process with AI (which may also trigger camera via tool)
         await processUserInput(speechResult);
       };
 
