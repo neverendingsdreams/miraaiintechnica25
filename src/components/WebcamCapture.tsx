@@ -50,6 +50,7 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isAnalyzing, o
     };
 
     initGestureRecognizer();
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
