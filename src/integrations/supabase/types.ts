@@ -35,6 +35,44 @@ export type Database = {
         }
         Relationships: []
       }
+      outfit_suggestions: {
+        Row: {
+          created_at: string | null
+          id: string
+          image_url: string | null
+          item_type: string
+          outfit_analysis_id: string | null
+          search_term: string
+          suggestion_text: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          image_url?: string | null
+          item_type: string
+          outfit_analysis_id?: string | null
+          search_term: string
+          suggestion_text: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          image_url?: string | null
+          item_type?: string
+          outfit_analysis_id?: string | null
+          search_term?: string
+          suggestion_text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outfit_suggestions_outfit_analysis_id_fkey"
+            columns: ["outfit_analysis_id"]
+            isOneToOne: false
+            referencedRelation: "outfit_analyses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
