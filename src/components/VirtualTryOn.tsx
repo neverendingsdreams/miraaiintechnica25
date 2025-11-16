@@ -89,19 +89,33 @@ export const VirtualTryOn = ({ videoRef, onClose }: VirtualTryOnProps) => {
   }, [mode, selectedDesign, videoRef, segmentBody]);
 
   const captureImage = (): string => {
-    if (!videoRef.current) return '';
+    if (!videoRef.current) {
+      console.error('Video ref is not available');
+      return '';
+    }
+
+    const video = videoRef.current;
     
-    const canvas = document.createElement('canvas');
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
-    const ctx = canvas.getContext('2d');
-    
-    if (ctx) {
-      ctx.drawImage(videoRef.current, 0, 0);
-      return canvas.toDataURL('image/jpeg', 0.9);
+    // Validate video has valid dimensions
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      console.error('Video dimensions are invalid:', { width: video.videoWidth, height: video.videoHeight });
+      return '';
     }
     
-    return '';
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx) {
+      console.error('Failed to get canvas context');
+      return '';
+    }
+
+    ctx.drawImage(video, 0, 0);
+    const imageData = canvas.toDataURL('image/jpeg', 0.9);
+    console.log('Captured image data length:', imageData.length);
+    return imageData;
   };
 
   const handleAITryOn = async () => {
@@ -119,6 +133,11 @@ export const VirtualTryOn = ({ videoRef, onClose }: VirtualTryOnProps) => {
 
     try {
       const imageData = captureImage();
+      
+      if (!imageData) {
+        throw new Error('Failed to capture image from video. Please make sure the camera is active and try again.');
+      }
+      
       setOriginalImage(imageData);
 
       console.log('Generating AI virtual try-on...');
