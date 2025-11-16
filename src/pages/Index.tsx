@@ -216,13 +216,13 @@ const Index = () => {
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto space-y-8">
           {/* Logo Hero Section */}
-          <div className="flex flex-col items-center gap-6 animate-fade-in">
+          <div className="flex flex-col items-center gap-6 animate-fade-in mb-8">
             <img 
               src={miraLogo} 
               alt="Mira AI Fashion Stylist" 
               className="h-72 w-72 object-contain animate-float hover-scale transition-all duration-500 drop-shadow-elegant"
             />
-            <div className="text-center space-y-3">
+            <div className="text-center space-y-3 mb-12">
               <h1 className="text-5xl font-bold bg-gradient-spooky bg-clip-text text-transparent">
                 MiraAI: Your Personal AI Fashion Stylist
               </h1>
