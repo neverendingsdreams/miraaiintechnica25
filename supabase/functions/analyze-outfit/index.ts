@@ -36,7 +36,7 @@ Include:
 Keep it warm, friendly, and BRIEF. Voice-friendly length only.`;
 
     // Call Gemini API directly
-    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=' + GEMINI_API_KEY, {
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + GEMINI_API_KEY, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
