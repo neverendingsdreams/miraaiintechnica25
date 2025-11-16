@@ -171,6 +171,15 @@ export const VirtualTryOn = ({ videoRef, onClose }: VirtualTryOnProps) => {
 
   return (
     <Card className="p-6 space-y-4">
+      {/* Hidden video element to maintain camera stream */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className="hidden"
+      />
+
       <div className="flex items-center gap-3 mb-4">
         <Button variant="ghost" size="icon" onClick={onClose}>
           <ArrowLeft className="h-5 w-5" />
