@@ -36,50 +36,76 @@ Include:
 Keep it warm, friendly, and BRIEF. Voice-friendly length only.`;
 
     // Call Gemini API directly
-    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + GEMINI_API_KEY, {
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + GEMINI_API_KEY;
+    const payload = {
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              text: systemPrompt + '\n\nPlease analyze this outfit and provide your expert fashion advice.'
+            },
+            {
+              inline_data: {
+                mime_type: 'image/jpeg',
+                data: base64Data
+              }
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        temperature: 0.8,
+        maxOutputTokens: 1000,
+        candidateCount: 1
+      },
+      safetySettings: [
+        { category: 'HARM_CATEGORY_SEXUAL', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+      ]
+    };
+
+    let response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: systemPrompt + '\n\nPlease analyze this outfit and provide your expert fashion advice.'
-              },
-              {
-                inline_data: {
-                  mime_type: 'image/jpeg',
-                  data: base64Data
-                }
-              }
-            ]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.8,
-          maxOutputTokens: 1000,
-          candidateCount: 1
-        }
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Lovable AI error:', response.status, errorText);
+      const firstStatus = response.status;
+      const firstText = await response.text();
+      console.error('Gemini error:', firstStatus, firstText);
       
-      if (response.status === 429) {
+      if (firstStatus === 429) {
         throw new Error('Rate limit exceeded. Please try again in a moment.');
       }
-      if (response.status === 402) {
+      if (firstStatus === 402) {
         throw new Error('AI usage limit reached. Please add credits to continue.');
       }
       
-      throw new Error(`AI analysis failed: ${response.status}`);
+      if (firstStatus === 503) {
+        console.log('Gemini overloaded (503). Retrying once...');
+        await new Promise((r) => setTimeout(r, 800));
+        response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+          const retryText = await response.text();
+          console.error('Retry failed:', response.status, retryText);
+          throw new Error(`AI analysis failed: ${response.status}`);
+        }
+      } else {
+        throw new Error(`AI analysis failed: ${firstStatus}`);
+      }
     }
 
-    const data = await response.json();
+    let data = await response.json();
     console.log('Gemini API response:', JSON.stringify(data));
     
     // Check for blocked content or safety issues
@@ -87,10 +113,39 @@ Keep it warm, friendly, and BRIEF. Voice-friendly length only.`;
       throw new Error(`Content blocked: ${data.promptFeedback.blockReason}`);
     }
     
-    const analysis = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const extract = (d: any) => {
+      const parts = d.candidates?.[0]?.content?.parts;
+      if (Array.isArray(parts)) {
+        return parts.map((p: any) => p?.text).filter(Boolean).join(' ').trim();
+      }
+      return undefined;
+    };
+
+    let analysis = extract(data);
+
+    // Fallback: if the primary model returns no text, try flash-lite once
+    if (!analysis) {
+      const finish = data.candidates?.[0]?.finishReason;
+      console.warn('Primary model returned no text. finishReason=', finish, ' — trying flash-lite');
+      const fallbackUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=' + GEMINI_API_KEY;
+      const fallbackResp = await fetch(fallbackUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (fallbackResp.ok) {
+        const fbData = await fallbackResp.json();
+        console.log('Fallback Gemini response:', JSON.stringify(fbData));
+        analysis = extract(fbData);
+      } else {
+        const fbErr = await fallbackResp.text();
+        console.error('Fallback call failed:', fallbackResp.status, fbErr);
+      }
+    }
 
     if (!analysis) {
-      console.error('No text in response. Full response:', JSON.stringify(data));
+      console.error('No text in response after fallback. Last response:', JSON.stringify(data));
       throw new Error('No analysis returned from Gemini. The response may have been filtered.');
     }
 
