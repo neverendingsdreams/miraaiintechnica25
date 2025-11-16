@@ -13,6 +13,7 @@ import fashion1 from '@/assets/fashion-1.jpg';
 import fashion2 from '@/assets/fashion-2.jpg';
 import fashion3 from '@/assets/fashion-3.jpg';
 import fashion4 from '@/assets/fashion-4.jpg';
+import miraLogo from '@/assets/mira-logo.png';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -177,9 +178,11 @@ const Index = () => {
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="rounded-full bg-gradient-fashion p-3 shadow-elegant">
-                <Sparkles className="h-6 w-6 text-white" />
-              </div>
+              <img 
+                src={miraLogo} 
+                alt="Mira AI Logo" 
+                className="h-16 w-16 object-contain animate-scale-in hover-scale drop-shadow-elegant"
+              />
               <div>
                 <h1 className="text-3xl font-bold bg-gradient-fashion bg-clip-text text-transparent">
                   Mira AI
@@ -212,8 +215,17 @@ const Index = () => {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto space-y-8">
+          {/* Logo Hero Section */}
+          <div className="flex justify-center animate-fade-in">
+            <img 
+              src={miraLogo} 
+              alt="Mira AI Fashion Stylist" 
+              className="h-48 w-48 object-contain animate-float hover-scale transition-all duration-500 drop-shadow-elegant"
+            />
+          </div>
+          
           {/* Introduction */}
-          <div className="text-center space-y-4 animate-fade-in">
+          <div className="text-center space-y-4 animate-fade-in" style={{ animationDelay: '0.2s' }}>
             <h2 className="text-4xl font-bold tracking-tight">
               Chat with Your AI Fashion Assistant
             </h2>
@@ -232,7 +244,7 @@ const Index = () => {
           </div>
 
           {/* Features */}
-          <div className="grid md:grid-cols-3 gap-6 mt-12 animate-fade-in" style={{ animationDelay: '0.2s' }}>
+          <div className="grid md:grid-cols-3 gap-6 mt-12 animate-fade-in" style={{ animationDelay: '0.4s' }}>
             <div className="p-6 rounded-xl bg-card/50 backdrop-blur-sm border border-border/50 hover:shadow-elegant transition-all duration-300">
               <div className="w-12 h-12 rounded-full bg-gradient-fashion/20 flex items-center justify-center mb-4">
                 <Mic className="h-6 w-6 text-primary" />
