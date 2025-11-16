@@ -61,7 +61,7 @@ const VoiceInterface = ({ onSpeakingChange }: VoiceInterfaceProps) => {
 
       // Start the conversation with the signed URL
       await conversation.startSession({
-        url: data.signed_url,
+        signedUrl: data.signed_url,
       });
 
       setIsConnecting(false);
