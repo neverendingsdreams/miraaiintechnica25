@@ -59,7 +59,16 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('OpenAI TTS error:', response.status, errorText);
-      throw new Error(`Text-to-speech failed: ${response.status}`);
+      
+      // Provide more detailed error information
+      let errorMessage = `Text-to-speech failed: ${response.status}`;
+      if (response.status === 429) {
+        errorMessage = 'OpenAI API rate limit exceeded. Please check your API quota or try again later.';
+      } else if (response.status === 401) {
+        errorMessage = 'Invalid OpenAI API key. Please check your configuration.';
+      }
+      
+      throw new Error(errorMessage);
     }
 
     // Get audio data as array buffer

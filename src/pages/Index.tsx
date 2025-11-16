@@ -87,7 +87,7 @@ const Index = () => {
       stopCameraStream();
       setTimeout(() => setShowCamera(false), 500);
 
-      // Speak the analysis using ElevenLabs, fallback to browser TTS on failure
+      // Speak the analysis using OpenAI TTS, fallback to browser TTS on failure
       setIsSpeaking(true);
       try {
         const { data: audioData, error: ttsError } = await supabase.functions.invoke('text-to-speech', {
@@ -102,13 +102,23 @@ const Index = () => {
           throw new Error(ttsError?.message || 'No audio returned');
         }
       } catch (ttsError) {
-        console.error('Text-to-speech error (falling back to browser TTS):', ttsError);
+        console.warn('OpenAI TTS unavailable, using browser speech:', ttsError);
+        // Fallback to browser's built-in speech synthesis
         const synth = window.speechSynthesis;
         const utter = new SpeechSynthesisUtterance(analysis);
         utter.rate = 1.0;
+        utter.pitch = 1.0;
+        utter.volume = 1.0;
         utter.onend = () => setIsSpeaking(false);
         synth.cancel();
         synth.speak(utter);
+        
+        // Inform user we're using fallback
+        toast({
+          title: "Using browser voice",
+          description: "AI voice temporarily unavailable. Check your OpenAI API quota.",
+          variant: "default",
+        });
       }
 
       toast({
