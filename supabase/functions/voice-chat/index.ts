@@ -25,14 +25,18 @@ serve(async (req) => {
     // Build personalized context from user preferences
     let personalizationContext = '';
     if (userPreferences) {
-      personalizationContext = `\n\nUser's Style Profile:
+      const genderContext = userPreferences.gender && userPreferences.gender !== 'prefer-not-to-say' 
+        ? `\n- Gender: ${userPreferences.gender}` 
+        : '';
+      
+      personalizationContext = `\n\nUser's Style Profile:${genderContext}
 - Preferred Style: ${userPreferences.style}
 - Favorite Colors: ${userPreferences.colors}
 - Common Occasions: ${userPreferences.occasions}
 - Fit Preference: ${userPreferences.bodyType}
 - Budget Range: ${userPreferences.budget}
 
-Use this information to provide personalized, relevant advice that matches their preferences.`;
+Use this information to provide personalized, relevant advice that matches their preferences. Tailor your suggestions to be appropriate for their gender identity when relevant (e.g., cuts, silhouettes, traditional vs contemporary styles).`;
     }
 
     // Build messages array with conversation history
