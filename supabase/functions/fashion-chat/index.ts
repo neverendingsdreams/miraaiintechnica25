@@ -107,10 +107,18 @@ Guidelines:
     }
 
     const aiData = await aiResponse.json();
+    console.log('Gemini API response:', JSON.stringify(aiData));
+    
+    // Check for blocked content or safety issues
+    if (aiData.promptFeedback?.blockReason) {
+      throw new Error(`Content blocked: ${aiData.promptFeedback.blockReason}`);
+    }
+    
     const responseText = aiData.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!responseText) {
-      throw new Error('No response from Gemini');
+      console.error('No text in response. Full response:', JSON.stringify(aiData));
+      throw new Error('No response from Gemini. The response may have been filtered.');
     }
 
     console.log('AI response received:', responseText.substring(0, 100));
