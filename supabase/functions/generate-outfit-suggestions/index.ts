@@ -113,72 +113,90 @@ Focus on practical, wearable suggestions that complement the existing outfit. Co
     console.log('AI Response:', JSON.stringify(data, null, 2));
 
     const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall) {
+    
+    if (!toolCall || !toolCall.function || toolCall.function.name !== 'suggest_outfit_items') {
+      throw new Error('Invalid AI response format');
+    }
+
+    const args = JSON.parse(toolCall.function.arguments);
+    const aiSuggestions = args.suggestions;
+
+    if (!Array.isArray(aiSuggestions) || aiSuggestions.length === 0) {
       throw new Error('No suggestions generated');
     }
 
-    const suggestions = JSON.parse(toolCall.function.arguments).suggestions;
+    console.log('AI suggested items:', aiSuggestions.length);
 
-    // Generate images for each suggestion using AI
-    const suggestionsWithImages = await Promise.all(
-      suggestions.map(async (suggestion: any) => {
+    // Search for real products for each suggestion
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
+
+    const suggestionsWithProducts = await Promise.all(
+      aiSuggestions.map(async (suggestion: any) => {
         try {
-          const imageGenResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          console.log('Searching products for:', suggestion.search_term);
+          
+          const searchResponse = await fetch(`${SUPABASE_URL}/functions/v1/search-products`, {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              model: 'google/gemini-2.5-flash-image-preview',
-              messages: [
-                {
-                  role: 'user',
-                  content: `Generate a clean, professional product photo of: ${suggestion.search_term}. Studio lighting, white background, fashion photography style.`
-                }
-              ],
-              modalities: ['image', 'text']
-            }),
+              searchTerm: suggestion.search_term
+            })
           });
 
-          if (imageGenResponse.ok) {
-            const imageData = await imageGenResponse.json();
-            const generatedImageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-            
+          if (!searchResponse.ok) {
+            console.error('Product search failed:', searchResponse.status);
             return {
-              ...suggestion,
-              image_url: generatedImageUrl || null
+              item_type: suggestion.item_type,
+              suggestion_text: suggestion.suggestion_text,
+              products: []
             };
           }
-        } catch (error) {
-          console.error('Error generating image for suggestion:', error);
-        }
 
-        return {
-          ...suggestion,
-          image_url: null
-        };
+          const { products } = await searchResponse.json();
+          console.log('Found products:', products.length);
+
+          return {
+            item_type: suggestion.item_type,
+            suggestion_text: suggestion.suggestion_text,
+            products: products || []
+          };
+
+        } catch (error) {
+          console.error('Error fetching products:', error);
+          return {
+            item_type: suggestion.item_type,
+            suggestion_text: suggestion.suggestion_text,
+            products: []
+          };
+        }
       })
     );
 
+    console.log('Generated suggestions with products:', suggestionsWithProducts.length);
+
     return new Response(
-      JSON.stringify({ suggestions: suggestionsWithImages }),
+      JSON.stringify({ suggestions: suggestionsWithProducts }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200 
+        status: 200
       }
     );
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in generate-outfit-suggestions:', error);
+    
     return new Response(
       JSON.stringify({ 
-        error: error.message || 'Failed to generate suggestions',
-        details: error.toString()
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        suggestions: []
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500 
+        status: 500
       }
     );
   }

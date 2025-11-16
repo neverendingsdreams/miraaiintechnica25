@@ -1,11 +1,19 @@
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { OutfitSuggestionCard } from './OutfitSuggestionCard';
+import { ProductCard } from './ProductCard';
 import { Sparkles, Loader2 } from 'lucide-react';
+
+interface Product {
+  title: string;
+  price: string;
+  image_url: string;
+  product_url: string;
+  store_name: string;
+}
 
 interface Suggestion {
   item_type: string;
   suggestion_text: string;
-  image_url?: string;
+  products?: Product[];
 }
 
 interface SuggestionPanelProps {
@@ -35,14 +43,20 @@ export const SuggestionPanel = ({ suggestions, isLoading }: SuggestionPanelProps
       </div>
       <ScrollArea className="h-[500px]">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pr-4">
-          {suggestions.map((suggestion, index) => (
-            <OutfitSuggestionCard
-              key={index}
-              itemType={suggestion.item_type}
-              suggestionText={suggestion.suggestion_text}
-              imageUrl={suggestion.image_url}
-            />
-          ))}
+          {suggestions.flatMap((suggestion, sugIdx) => 
+            (suggestion.products || []).map((product, prodIdx) => (
+              <ProductCard
+                key={`${sugIdx}-${prodIdx}`}
+                title={product.title}
+                price={product.price}
+                image_url={product.image_url}
+                product_url={product.product_url}
+                store_name={product.store_name}
+                item_type={suggestion.item_type}
+                suggestion_text={suggestion.suggestion_text}
+              />
+            ))
+          )}
         </div>
       </ScrollArea>
     </div>
