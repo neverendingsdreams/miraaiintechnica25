@@ -60,11 +60,13 @@ const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps)
         ];
         if (cameraPhrases.some((r) => r.test(lower))) {
           try {
-            // Speak confirmation then open camera
-            if (synthRef.current) {
-              const u = new SpeechSynthesisUtterance("Opening the camera. Stand about 2 steps back so I can see your outfit.");
-              synthRef.current.cancel();
-              synthRef.current.speak(u);
+            // Speak confirmation using ElevenLabs
+            const { data: audioData } = await supabase.functions.invoke('text-to-speech', {
+              body: { text: "Opening the camera. Stand about 2 steps back so I can see your outfit.", voice: 'Aria' }
+            });
+            if (audioData?.audioContent) {
+              const audio = new Audio(`data:audio/mpeg;base64,${audioData.audioContent}`);
+              audio.play();
             }
           } catch {}
           onShowCamera();
@@ -134,28 +136,28 @@ const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps)
       if (data.action === 'show_camera') {
         console.log('Opening camera for outfit analysis');
         
-        // Speak the message first
-        if (synthRef.current && data.text) {
-          const utterance = new SpeechSynthesisUtterance(data.text);
-          utterance.rate = 1.0;
-          
-          const voices = synthRef.current.getVoices();
-          const femaleVoice = voices.find(voice => 
-            voice.name.includes('Female') || 
-            voice.name.includes('Samantha') ||
-            voice.name.includes('Karen') ||
-            voice.name.includes('Moira')
-          );
-          if (femaleVoice) {
-            utterance.voice = femaleVoice;
-          }
-
-          utterance.onend = () => {
+        // Speak the message first using ElevenLabs
+        if (data.text) {
+          try {
+            const { data: audioData } = await supabase.functions.invoke('text-to-speech', {
+              body: { text: data.text, voice: 'Aria' }
+            });
+            
+            if (audioData?.audioContent) {
+              const audio = new Audio(`data:audio/mpeg;base64,${audioData.audioContent}`);
+              audio.onended = () => {
+                onShowCamera();
+                setIsProcessing(false);
+              };
+              await audio.play();
+            } else {
+              onShowCamera();
+              setIsProcessing(false);
+            }
+          } catch {
             onShowCamera();
             setIsProcessing(false);
-          };
-
-          synthRef.current.speak(utterance);
+          }
         } else {
           onShowCamera();
           setIsProcessing(false);
@@ -171,46 +173,52 @@ const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps)
         setConversationHistory(prev => [...prev, { role: 'assistant', content: responseText }]);
       }
 
-      // Speak the response
-      if (synthRef.current && responseText) {
+      // Speak the response using ElevenLabs
+      if (responseText) {
         onSpeakingChange(true);
         setIsSpeaking(true);
         
-        const utterance = new SpeechSynthesisUtterance(responseText);
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-        
-        // Try to use a female voice
-        const voices = synthRef.current.getVoices();
-        const femaleVoice = voices.find(voice => 
-          voice.name.includes('Female') || 
-          voice.name.includes('Samantha') ||
-          voice.name.includes('Karen') ||
-          voice.name.includes('Moira')
-        );
-        if (femaleVoice) {
-          utterance.voice = femaleVoice;
-        }
+        try {
+          const { data: audioData, error: ttsError } = await supabase.functions.invoke('text-to-speech', {
+            body: { text: responseText, voice: 'Aria' }
+          });
 
-        utterance.onend = () => {
-          onSpeakingChange(false);
-          setIsSpeaking(false);
-          setIsProcessing(false);
-        };
+          if (ttsError) throw ttsError;
 
-        utterance.onerror = () => {
+          if (audioData?.audioContent) {
+            const audio = new Audio(`data:audio/mpeg;base64,${audioData.audioContent}`);
+            audio.onended = () => {
+              onSpeakingChange(false);
+              setIsSpeaking(false);
+              setIsProcessing(false);
+            };
+            audio.onerror = () => {
+              onSpeakingChange(false);
+              setIsSpeaking(false);
+              setIsProcessing(false);
+              toast({
+                title: "Playback Error",
+                description: "Failed to play audio.",
+                variant: "destructive"
+              });
+            };
+            await audio.play();
+          } else {
+            onSpeakingChange(false);
+            setIsSpeaking(false);
+            setIsProcessing(false);
+          }
+        } catch (error: any) {
+          console.error('TTS error:', error);
           onSpeakingChange(false);
           setIsSpeaking(false);
           setIsProcessing(false);
           toast({
-            title: "Playback Error",
-            description: "Failed to speak response.",
+            title: "Audio Error",
+            description: "Failed to generate speech.",
             variant: "destructive"
           });
-        };
-
-        synthRef.current.speak(utterance);
+        }
       } else {
         setIsProcessing(false);
       }
