@@ -59,7 +59,7 @@ Keep it warm, friendly, and BRIEF. Voice-friendly length only.`;
         ],
         generationConfig: {
           temperature: 0.8,
-          maxOutputTokens: 150
+          maxOutputTokens: 500
         }
       }),
     });
