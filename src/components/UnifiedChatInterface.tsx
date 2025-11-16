@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Loader2, Sparkles, Mic, MicOff, Image as ImageIcon, X, Video, VideoOff, Camera, Eye, EyeOff } from 'lucide-react';
+import { Send, Loader2, Sparkles, Mic, MicOff, Image as ImageIcon, X, Video, VideoOff, Camera, Eye, EyeOff, ThumbsUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { GestureRecognizer, FilesetResolver } from '@mediapipe/tasks-vision';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -35,6 +36,7 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [liveAnalysis, setLiveAnalysis] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [gestureDetected, setGestureDetected] = useState<string | null>(null);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const monitoringIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -42,6 +44,35 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const liveVideoRef = useRef<HTMLVideoElement>(null);
+  const gestureRecognizerRef = useRef<GestureRecognizer | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+
+  // Initialize gesture recognizer
+  useEffect(() => {
+    const initGestureRecognizer = async () => {
+      try {
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+        );
+        
+        const recognizer = await GestureRecognizer.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task",
+            delegate: "GPU"
+          },
+          runningMode: "VIDEO",
+          numHands: 1
+        });
+        
+        gestureRecognizerRef.current = recognizer;
+        console.log('Gesture recognizer initialized');
+      } catch (error) {
+        console.error('Failed to initialize gesture recognizer:', error);
+      }
+    };
+
+    initGestureRecognizer();
+  }, []);
 
   // Load user preferences
   useEffect(() => {
@@ -101,6 +132,9 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
       }
       if (monitoringIntervalRef.current) {
         clearInterval(monitoringIntervalRef.current);
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
       }
     };
   }, []);
@@ -298,6 +332,53 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
       }
     }
   };
+
+  // Detect gestures from live video
+  const detectGestures = useCallback(() => {
+    if (!liveVideoRef.current || !gestureRecognizerRef.current || !isLiveCameraActive || isProcessing) {
+      return;
+    }
+
+    try {
+      const results = gestureRecognizerRef.current.recognizeForVideo(
+        liveVideoRef.current,
+        performance.now()
+      );
+
+      if (results.gestures && results.gestures.length > 0) {
+        const gesture = results.gestures[0][0];
+        
+        if (gesture.categoryName === 'Thumb_Up' && gesture.score > 0.7) {
+          setGestureDetected('Thumb_Up');
+          console.log('Thumbs up detected! Capturing frame...');
+          
+          setTimeout(() => {
+            captureLiveFrame();
+            setGestureDetected(null);
+          }, 500);
+          
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Gesture detection error:', error);
+    }
+
+    animationFrameRef.current = requestAnimationFrame(detectGestures);
+  }, [isLiveCameraActive, isProcessing]);
+
+  // Start gesture detection when camera is active
+  useEffect(() => {
+    if (isLiveCameraActive && !isProcessing) {
+      detectGestures();
+    }
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [isLiveCameraActive, isProcessing, detectGestures]);
 
   const captureLiveFrame = () => {
     if (!liveVideoRef.current || !isLiveCameraActive) return;
@@ -540,6 +621,12 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
                 muted
                 className="w-full rounded-lg"
               />
+              {gestureDetected && (
+                <div className="absolute top-4 left-4 bg-primary/90 text-primary-foreground px-3 py-2 rounded-full flex items-center gap-2 animate-pulse shadow-lg">
+                  <ThumbsUp className="h-4 w-4" />
+                  <span className="text-sm font-medium">Thumbs Up Detected!</span>
+                </div>
+              )}
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
                 <Button
                   size="sm"
