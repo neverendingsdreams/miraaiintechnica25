@@ -60,15 +60,22 @@ const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps)
         ];
         if (cameraPhrases.some((r) => r.test(lower))) {
           try {
-            // Speak confirmation using ElevenLabs
-            const { data: audioData } = await supabase.functions.invoke('text-to-speech', {
+            // Speak confirmation using ElevenLabs (fallback to browser TTS)
+            const { data: audioData, error: ttsError } = await supabase.functions.invoke('text-to-speech', {
               body: { text: "Opening the camera. Stand about 2 steps back so I can see your outfit.", voice: 'Aria' }
             });
-            if (audioData?.audioContent) {
+            if (!ttsError && audioData?.audioContent) {
               const audio = new Audio(`data:audio/mpeg;base64,${audioData.audioContent}`);
-              audio.play();
+              await audio.play();
+            } else {
+              throw new Error(ttsError?.message || 'No audio');
             }
-          } catch {}
+          } catch (e) {
+            const synth = window.speechSynthesis;
+            const u = new SpeechSynthesisUtterance("Opening the camera. Stand about 2 steps back so I can see your outfit.");
+            synth.cancel();
+            synth.speak(u);
+          }
           onShowCamera();
           return;
         }
@@ -139,11 +146,11 @@ const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps)
         // Speak the message first using ElevenLabs
         if (data.text) {
           try {
-            const { data: audioData } = await supabase.functions.invoke('text-to-speech', {
+            const { data: audioData, error: ttsError } = await supabase.functions.invoke('text-to-speech', {
               body: { text: data.text, voice: 'Aria' }
             });
             
-            if (audioData?.audioContent) {
+            if (!ttsError && audioData?.audioContent) {
               const audio = new Audio(`data:audio/mpeg;base64,${audioData.audioContent}`);
               audio.onended = () => {
                 onShowCamera();
@@ -151,12 +158,18 @@ const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps)
               };
               await audio.play();
             } else {
-              onShowCamera();
-              setIsProcessing(false);
+              throw new Error(ttsError?.message || 'No audio');
             }
           } catch {
-            onShowCamera();
-            setIsProcessing(false);
+            // Fallback to browser TTS, then open camera
+            const synth = window.speechSynthesis;
+            const u = new SpeechSynthesisUtterance(data.text);
+            u.onend = () => {
+              onShowCamera();
+              setIsProcessing(false);
+            };
+            synth.cancel();
+            synth.speak(u);
           }
         } else {
           onShowCamera();
@@ -204,20 +217,20 @@ const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps)
             };
             await audio.play();
           } else {
-            onSpeakingChange(false);
-            setIsSpeaking(false);
-            setIsProcessing(false);
+            throw new Error('No audio');
           }
         } catch (error: any) {
           console.error('TTS error:', error);
-          onSpeakingChange(false);
-          setIsSpeaking(false);
-          setIsProcessing(false);
-          toast({
-            title: "Audio Error",
-            description: "Failed to generate speech.",
-            variant: "destructive"
-          });
+          // Fallback to browser TTS
+          const synth = window.speechSynthesis;
+          const u = new SpeechSynthesisUtterance(responseText);
+          u.onend = () => {
+            onSpeakingChange(false);
+            setIsSpeaking(false);
+            setIsProcessing(false);
+          };
+          synth.cancel();
+          synth.speak(u);
         }
       } else {
         setIsProcessing(false);

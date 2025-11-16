@@ -86,22 +86,28 @@ const Index = () => {
       stopCameraStream();
       setTimeout(() => setShowCamera(false), 500);
 
-      // Speak the analysis using ElevenLabs
+      // Speak the analysis using ElevenLabs, fallback to browser TTS on failure
       setIsSpeaking(true);
       try {
         const { data: audioData, error: ttsError } = await supabase.functions.invoke('text-to-speech', {
           body: { text: analysis, voice: 'Aria' }
         });
 
-        if (ttsError) throw ttsError;
-
-        // Play audio
-        const audio = new Audio(`data:audio/mpeg;base64,${audioData.audioContent}`);
-        audio.onended = () => setIsSpeaking(false);
-        await audio.play();
+        if (!ttsError && audioData?.audioContent) {
+          const audio = new Audio(`data:audio/mpeg;base64,${audioData.audioContent}`);
+          audio.onended = () => setIsSpeaking(false);
+          await audio.play();
+        } else {
+          throw new Error(ttsError?.message || 'No audio returned');
+        }
       } catch (ttsError) {
-        console.error('Text-to-speech error:', ttsError);
-        setIsSpeaking(false);
+        console.error('Text-to-speech error (falling back to browser TTS):', ttsError);
+        const synth = window.speechSynthesis;
+        const utter = new SpeechSynthesisUtterance(analysis);
+        utter.rate = 1.0;
+        utter.onend = () => setIsSpeaking(false);
+        synth.cancel();
+        synth.speak(utter);
       }
 
       toast({
