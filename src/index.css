@@ -39,6 +39,7 @@ All colors MUST be HSL.
     --radius: 1rem;
 
     --gradient-fashion: linear-gradient(135deg, hsl(345 70% 65%), hsl(25 85% 70%));
+    --gradient-spooky: linear-gradient(135deg, hsl(45 95% 60%), hsl(25 95% 55%), hsl(10 85% 50%));
     --gradient-subtle: linear-gradient(180deg, hsl(28 45% 97%), hsl(0 0% 100%));
     --shadow-elegant: 0 10px 40px -10px hsl(345 70% 65% / 0.2);
     --shadow-soft: 0 4px 20px -4px hsl(240 10% 15% / 0.1);

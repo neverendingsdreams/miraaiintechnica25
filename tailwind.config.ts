@@ -60,6 +60,7 @@ export default {
       },
       backgroundImage: {
         'gradient-fashion': 'var(--gradient-fashion)',
+        'gradient-spooky': 'var(--gradient-spooky)',
         'gradient-subtle': 'var(--gradient-subtle)',
       },
       boxShadow: {
