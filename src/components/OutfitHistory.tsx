@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, Calendar, Sparkles, Trash2, X } from 'lucide-react';
@@ -23,6 +24,7 @@ interface Suggestion {
 }
 
 export const OutfitHistory = () => {
+  const { user } = useAuth();
   const [history, setHistory] = useState<OutfitAnalysis[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedOutfit, setSelectedOutfit] = useState<OutfitAnalysis | null>(null);
@@ -167,7 +169,8 @@ export const OutfitHistory = () => {
           suggestion_text: s.suggestion_text,
           item_type: s.item_type,
           search_term: s.item_type,
-          image_url: s.image_url
+          image_url: s.image_url,
+          user_id: user!.id
         }));
 
         await supabase.from('outfit_suggestions').insert(suggestionRecords);

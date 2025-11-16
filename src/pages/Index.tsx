@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, History, MessageCircle, Image as ImageIcon, Mic, Settings as SettingsIcon } from 'lucide-react';
+import { Sparkles, History, MessageCircle, Image as ImageIcon, Mic, Settings as SettingsIcon, LogOut, Loader2 } from 'lucide-react';
 import { UnifiedChatInterface } from '@/components/UnifiedChatInterface';
 import WebcamCapture from '@/components/WebcamCapture';
 import { OutfitHistory } from '@/components/OutfitHistory';
 import { ThemeSelector } from '@/components/ThemeSelector';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,7 @@ import miraLogo from '@/assets/mira-logo.png';
 
 const Index = () => {
   const navigate = useNavigate();
+  const { user, loading } = useAuth();
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -25,11 +27,29 @@ const Index = () => {
   const cameraStreamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
+    if (!loading && !user) {
+      navigate('/auth');
+    }
+  }, [user, loading, navigate]);
+
+  useEffect(() => {
     const hasCompletedQuiz = localStorage.getItem('mira_user_preferences');
-    if (!hasCompletedQuiz) {
+    if (!hasCompletedQuiz && user) {
       navigate('/quiz');
     }
-  }, [navigate]);
+  }, [navigate, user]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   const handleShowCamera = () => {
     setShowCamera(true);
@@ -76,7 +96,8 @@ const Index = () => {
         .from('outfit_analyses')
         .insert({
           image_url: publicUrl,
-          analysis
+          analysis,
+          user_id: user!.id
         });
 
       if (dbError) {
@@ -193,6 +214,17 @@ const Index = () => {
               >
                 <History className="h-4 w-4" />
                 {showHistory ? 'Hide' : 'History'}
+              </Button>
+              <Button
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  navigate('/auth');
+                }}
+                variant="outline"
+                className="gap-2"
+              >
+                <LogOut className="h-4 w-4" />
+                Logout
               </Button>
             </div>
           </div>
