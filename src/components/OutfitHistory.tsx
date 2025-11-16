@@ -65,12 +65,26 @@ export const OutfitHistory = () => {
 
   const handleDeleteOne = async (id: string) => {
     try {
+      const outfit = history.find(item => item.id === id);
+      
+      // Delete from database
       const { error } = await supabase
         .from('outfit_analyses')
         .delete()
         .eq('id', id);
 
       if (error) throw error;
+
+      // Delete image from storage if it exists
+      if (outfit?.image_url) {
+        const urlParts = outfit.image_url.split('/outfit-images/');
+        if (urlParts.length > 1) {
+          const fileName = urlParts[1];
+          await supabase.storage
+            .from('outfit-images')
+            .remove([fileName]);
+        }
+      }
 
       setHistory(prev => prev.filter(item => item.id !== id));
       setItemToDelete(null);
@@ -91,10 +105,25 @@ export const OutfitHistory = () => {
 
   const handleClearAll = async () => {
     try {
+      // Delete all images from storage
+      const fileNames = history
+        .map(outfit => {
+          const urlParts = outfit.image_url.split('/outfit-images/');
+          return urlParts.length > 1 ? urlParts[1] : null;
+        })
+        .filter((name): name is string => name !== null);
+
+      if (fileNames.length > 0) {
+        await supabase.storage
+          .from('outfit-images')
+          .remove(fileNames);
+      }
+
+      // Delete all from database
       const { error } = await supabase
         .from('outfit_analyses')
         .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+        .neq('id', '00000000-0000-0000-0000-000000000000');
 
       if (error) throw error;
 
