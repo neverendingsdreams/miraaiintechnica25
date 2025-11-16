@@ -73,6 +73,36 @@ export type Database = {
           },
         ]
       }
+      tshirt_designs: {
+        Row: {
+          color: string | null
+          created_at: string
+          description: string
+          id: string
+          image_url: string
+          pattern: string | null
+          style: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          image_url: string
+          pattern?: string | null
+          style?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          image_url?: string
+          pattern?: string | null
+          style?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
