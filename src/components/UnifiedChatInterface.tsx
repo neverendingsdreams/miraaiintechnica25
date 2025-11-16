@@ -37,6 +37,8 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
   const [liveAnalysis, setLiveAnalysis] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [gestureDetected, setGestureDetected] = useState<string | null>(null);
+  const [isConversational, setIsConversational] = useState(false);
+  const [conversationHistory, setConversationHistory] = useState<Array<{role: string, content: string}>>([]);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const monitoringIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -152,13 +154,35 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
   }, [isSpeaking, onSpeakingChange]);
 
   const startListening = async () => {
+    if (!recognitionRef.current) {
+      toast({
+        title: "Voice Not Supported",
+        description: "Your browser doesn't support voice recognition.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // In conversational mode, handle voice differently
+      if (isConversational && isLiveCameraActive) {
+        recognitionRef.current.onresult = async (event: any) => {
+          const speechResult = event.results[0][0].transcript;
+          console.log('Voice question:', speechResult);
+          setIsListening(false);
+          
+          // Send to conversational AI with live image
+          await handleConversationalQuery(speechResult);
+        };
+      }
+      
       recognitionRef.current?.start();
       setIsListening(true);
       toast({
         title: "Listening...",
-        description: "Speak now",
+        description: isConversational ? "Ask me anything!" : "Speak now",
       });
     } catch (error) {
       toast({
@@ -269,6 +293,8 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
         monitoringIntervalRef.current = null;
       }
       setIsMonitoring(false);
+      setIsConversational(false);
+      setConversationHistory([]);
       setLiveAnalysis('');
       toast({
         title: "Monitoring Stopped",
@@ -288,6 +314,97 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
         title: "Monitoring Started",
         description: "Mira will analyze your outfit every 10 seconds",
       });
+    }
+  };
+
+  const toggleConversational = () => {
+    setIsConversational(!isConversational);
+    if (!isConversational) {
+      setConversationHistory([]);
+      toast({
+        title: "Conversational Mode Active",
+        description: "You can now ask me questions! Click the mic button and speak.",
+      });
+    } else {
+      toast({
+        title: "Conversational Mode Off",
+        description: "Switched back to regular monitoring",
+      });
+    }
+  };
+
+  const handleConversationalQuery = async (query: string) => {
+    if (!liveVideoRef.current) return;
+
+    setIsProcessing(true);
+    
+    try {
+      // Capture current frame
+      const video = liveVideoRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      
+      ctx.drawImage(video, 0, 0);
+      const imageData = canvas.toDataURL('image/jpeg', 0.8);
+
+      console.log('Sending conversational query with image...');
+
+      // Call fashion-chat edge function
+      const { data, error } = await supabase.functions.invoke('fashion-chat', {
+        body: {
+          message: query,
+          imageData: imageData,
+          conversationHistory: conversationHistory.slice(-4) // Keep last 2 exchanges
+        }
+      });
+
+      if (error) throw error;
+
+      const responseText = data.text;
+      const audioData = data.audio;
+
+      console.log('Received response:', responseText);
+
+      // Update conversation history
+      setConversationHistory(prev => [
+        ...prev,
+        { role: 'user', content: query },
+        { role: 'assistant', content: responseText }
+      ]);
+
+      // Update live analysis display
+      setLiveAnalysis(responseText);
+
+      // Play audio response if available
+      if (audioData && synthRef.current) {
+        const audio = new Audio(audioData);
+        audio.play();
+        setIsSpeaking(true);
+        audio.onended = () => setIsSpeaking(false);
+      } else if (synthRef.current) {
+        // Fallback to browser TTS
+        synthRef.current.cancel();
+        const utterance = new SpeechSynthesisUtterance(responseText);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        utterance.onstart = () => setIsSpeaking(true);
+        utterance.onend = () => setIsSpeaking(false);
+        synthRef.current.speak(utterance);
+      }
+
+    } catch (error) {
+      console.error('Error in conversational query:', error);
+      toast({
+        title: "Conversation Error",
+        description: error instanceof Error ? error.message : "Failed to process your question",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -672,6 +789,17 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
                   {isMonitoring ? <Eye className="h-4 w-4 mr-2" /> : <EyeOff className="h-4 w-4 mr-2" />}
                   {isMonitoring ? "Monitoring" : "Monitor"}
                 </Button>
+                {isMonitoring && (
+                  <Button
+                    size="sm"
+                    variant={isConversational ? "default" : "outline"}
+                    onClick={toggleConversational}
+                    className={isConversational ? "bg-gradient-fashion" : ""}
+                  >
+                    <Mic className="h-4 w-4 mr-2" />
+                    {isConversational ? "Chatting" : "Chat"}
+                  </Button>
+                )}
               </div>
               
               {/* Analysis status indicator */}
@@ -688,13 +816,21 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
               <div className="bg-gradient-to-br from-primary/10 to-accent/10 rounded-lg p-4 border border-border">
                 <div className="flex items-center gap-2 mb-3">
                   <Sparkles className="h-5 w-5 text-primary" />
-                  <h3 className="font-semibold text-lg">Live Feedback</h3>
+                  <h3 className="font-semibold text-lg">
+                    {isConversational ? "Conversation" : "Live Feedback"}
+                  </h3>
                   {isMonitoring && (
                     <span className="ml-auto text-xs bg-primary/20 text-primary px-2 py-1 rounded-full">
-                      Active
+                      {isConversational ? "Conversational" : "Active"}
                     </span>
                   )}
                 </div>
+                {isConversational && (
+                  <div className="mb-3 text-sm text-muted-foreground flex items-center gap-2">
+                    <Mic className="h-4 w-4" />
+                    <span>Click the mic button below to ask me anything about your outfit!</span>
+                  </div>
+                )}
                 
                 {liveAnalysis ? (
                   <div className="space-y-2">
@@ -769,10 +905,11 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
 
           <Button
             size="icon"
-            variant={isListening ? "default" : "outline"}
+            variant={isListening || (isConversational && isLiveCameraActive) ? "default" : "outline"}
             onClick={isListening ? stopListening : startListening}
-            disabled={isProcessing}
-            className={isListening ? "bg-red-500 hover:bg-red-600" : ""}
+            disabled={isProcessing || (isConversational && !isLiveCameraActive)}
+            className={isListening ? "bg-red-500 hover:bg-red-600" : (isConversational && isLiveCameraActive ? "bg-gradient-fashion animate-pulse" : "")}
+            title={isConversational && isLiveCameraActive ? "Ask me anything about your outfit!" : "Voice input"}
           >
             {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
           </Button>

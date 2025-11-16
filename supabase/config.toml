@@ -3,6 +3,9 @@ project_id = "mwjmytdcalmngmsigucf"
 [functions.analyze-outfit]
 verify_jwt = false
 
+[functions.fashion-chat]
+verify_jwt = false
+
 [functions.generate-outfit-suggestions]
 verify_jwt = false
 
