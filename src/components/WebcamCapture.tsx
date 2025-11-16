@@ -17,6 +17,20 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isAnalyzing })
 
   const startCamera = useCallback(async () => {
     try {
+      console.log('Starting camera access...');
+      
+      // Check if getUserMedia is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error('getUserMedia not supported');
+        toast({
+          title: "Camera Not Supported",
+          description: "Your browser doesn't support camera access. Please use a modern browser like Chrome, Firefox, or Safari.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      console.log('Requesting camera permission...');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
           width: { ideal: 1280 },
@@ -25,18 +39,72 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isAnalyzing })
         }
       });
       
+      console.log('Camera stream obtained:', stream);
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        console.log('Stream set to video element');
+        
         videoRef.current.onloadedmetadata = () => {
-          setIsStreaming(true);
-          setIsCameraReady(true);
+          console.log('Video metadata loaded, playing video...');
+          videoRef.current?.play().then(() => {
+            console.log('Video playing successfully');
+            setIsStreaming(true);
+            setIsCameraReady(true);
+          }).catch(playError => {
+            console.error('Error playing video:', playError);
+            toast({
+              title: "Video Playback Error",
+              description: "Failed to play camera feed. Please try again.",
+              variant: "destructive"
+            });
+          });
         };
+        
+        videoRef.current.onerror = (error) => {
+          console.error('Video element error:', error);
+          toast({
+            title: "Video Error",
+            description: "There was an error with the video element.",
+            variant: "destructive"
+          });
+        };
+      } else {
+        console.error('Video ref is null');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error accessing camera:', error);
+      
+      let errorMessage = "Please allow camera access to use Mira AI.";
+      
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        errorMessage = "Camera permission was denied. Please allow camera access in your browser settings and try again.";
+      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+        errorMessage = "No camera found. Please connect a camera and try again.";
+      } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+        errorMessage = "Camera is already in use by another application. Please close other apps using the camera.";
+      } else if (error.name === 'OverconstrainedError') {
+        errorMessage = "Camera constraints could not be satisfied. Trying with default settings...";
+        
+        // Try again with minimal constraints
+        try {
+          console.log('Retrying with minimal constraints...');
+          const simpleStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          if (videoRef.current) {
+            videoRef.current.srcObject = simpleStream;
+            videoRef.current.play();
+            setIsStreaming(true);
+            setIsCameraReady(true);
+            return;
+          }
+        } catch (retryError) {
+          console.error('Retry failed:', retryError);
+        }
+      }
+      
       toast({
-        title: "Camera Access Denied",
-        description: "Please allow camera access to use Mira AI.",
+        title: "Camera Access Failed",
+        description: errorMessage,
         variant: "destructive"
       });
     }
