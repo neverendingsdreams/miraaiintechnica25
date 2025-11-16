@@ -9,6 +9,10 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import fashion1 from '@/assets/fashion-1.jpg';
+import fashion2 from '@/assets/fashion-2.jpg';
+import fashion3 from '@/assets/fashion-3.jpg';
+import fashion4 from '@/assets/fashion-4.jpg';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -131,7 +135,38 @@ const Index = () => {
 
 
   return (
-    <div className="min-h-screen bg-gradient-subtle">
+    <div className="min-h-screen bg-gradient-subtle relative overflow-hidden">
+      {/* Fashion Photo Background Grid */}
+      <div className="absolute inset-0 pointer-events-none opacity-20 blur-[2px]">
+        <div className="grid grid-cols-4 grid-rows-3 gap-4 h-full p-4">
+          <div className="col-span-1 row-span-2 rounded-2xl overflow-hidden shadow-elegant">
+            <img src={fashion2} alt="" className="w-full h-full object-cover" />
+          </div>
+          <div className="col-span-2 row-span-1 rounded-2xl overflow-hidden shadow-elegant">
+            <img src={fashion1} alt="" className="w-full h-full object-cover" />
+          </div>
+          <div className="col-span-1 row-span-2 rounded-2xl overflow-hidden shadow-elegant">
+            <img src={fashion4} alt="" className="w-full h-full object-cover" />
+          </div>
+          <div className="col-span-2 row-span-2 rounded-2xl overflow-hidden shadow-elegant">
+            <img src={fashion3} alt="" className="w-full h-full object-cover" />
+          </div>
+        </div>
+      </div>
+      
+      {/* Floating Fashion Accents - Hidden on Mobile */}
+      <div className="hidden lg:block absolute left-8 top-1/4 w-32 h-48 rounded-2xl overflow-hidden shadow-elegant opacity-30 blur-sm pointer-events-none animate-float">
+        <img src={fashion4} alt="" className="w-full h-full object-cover" />
+      </div>
+      <div className="hidden lg:block absolute right-8 top-1/3 w-40 h-56 rounded-2xl overflow-hidden shadow-elegant opacity-25 blur-sm pointer-events-none animate-float" style={{ animationDelay: '1s' }}>
+        <img src={fashion2} alt="" className="w-full h-full object-cover" />
+      </div>
+      <div className="hidden lg:block absolute left-12 bottom-1/4 w-36 h-24 rounded-2xl overflow-hidden shadow-elegant opacity-20 blur-sm pointer-events-none animate-float" style={{ animationDelay: '2s' }}>
+        <img src={fashion3} alt="" className="w-full h-full object-cover" />
+      </div>
+      
+      {/* Content overlay */}
+      <div className="relative z-10">
       <ThemeSelector />
       
       {/* Header */}
@@ -244,6 +279,7 @@ const Index = () => {
           <OutfitHistory />
         </div>
       )}
+      </div>
     </div>
   );
 };
