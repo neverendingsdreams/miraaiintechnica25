@@ -22,7 +22,7 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
-    // Call Lovable AI for fashion advice
+    // Call Lovable AI for fashion advice with tool calling
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -51,6 +51,8 @@ Communication style:
 - Ask follow-up questions to understand user needs
 - Use fashion terminology but explain when needed
 
+When the user wants you to see their outfit (phrases like "see my outfit", "check my look", "analyze my clothes", "what do you think of this"), use the show_camera tool.
+
 Remember: You're having a voice conversation, so be concise and conversational.`
           },
           {
@@ -58,6 +60,21 @@ Remember: You're having a voice conversation, so be concise and conversational.`
             content: text
           }
         ],
+        tools: [
+          {
+            type: 'function',
+            function: {
+              name: 'show_camera',
+              description: 'Opens the camera to capture and analyze the user\'s outfit. Use this when the user asks you to see, check, or analyze their outfit.',
+              parameters: {
+                type: 'object',
+                properties: {},
+                required: []
+              }
+            }
+          }
+        ],
+        tool_choice: 'auto',
         temperature: 0.8,
         max_tokens: 150
       }),
@@ -70,15 +87,33 @@ Remember: You're having a voice conversation, so be concise and conversational.`
     }
 
     const aiData = await aiResponse.json();
-    const responseText = aiData.choices[0].message.content;
+    const message = aiData.choices[0].message;
+    
+    // Check if AI wants to use the camera tool
+    if (message.tool_calls && message.tool_calls.length > 0) {
+      const toolCall = message.tool_calls[0];
+      if (toolCall.function.name === 'show_camera') {
+        console.log('AI requested camera access');
+        return new Response(
+          JSON.stringify({ 
+            action: 'show_camera',
+            text: "Let me take a look at your outfit!"
+          }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200
+          }
+        );
+      }
+    }
 
+    const responseText = message.content;
     console.log('AI response generated:', responseText.substring(0, 50));
 
-    // Generate speech using Web Speech API synthesis markup
     return new Response(
       JSON.stringify({ 
         text: responseText,
-        audioUrl: null // Client will use Web Speech API
+        audioUrl: null
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
