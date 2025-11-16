@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { Sparkles, History } from 'lucide-react';
+import { Sparkles, History, Mic, MessageSquare } from 'lucide-react';
 import VoiceInterface from '@/components/VoiceInterface';
+import { ChatInterface } from '@/components/ChatInterface';
 import WebcamCapture from '@/components/WebcamCapture';
 import { OutfitHistory } from '@/components/OutfitHistory';
 import { ThemeSelector } from '@/components/ThemeSelector';
@@ -9,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 const Index = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -16,6 +18,7 @@ const Index = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
+  const [mode, setMode] = useState<'voice' | 'chat'>('voice');
   const { toast } = useToast();
   const cameraStreamRef = useRef<MediaStream | null>(null);
 
@@ -191,44 +194,66 @@ const Index = () => {
           {/* Introduction */}
           <div className="text-center space-y-4 animate-fade-in">
             <h2 className="text-4xl font-bold tracking-tight">
-              Talk to Your AI Fashion Assistant
+              Chat with Your AI Fashion Assistant
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
               Have a natural conversation with Mira! Ask for fashion advice, outfit suggestions,
-              color coordination tips, and styling recommendations - all through voice.
+              color coordination tips, and styling recommendations - through voice or text.
             </p>
           </div>
 
-          {/* Conversation Indicator */}
-          <div className="text-center py-12">
-            {isSpeaking ? (
-              <div className="space-y-4 animate-fade-in">
-                <div className="w-24 h-24 mx-auto rounded-full bg-gradient-fashion flex items-center justify-center shadow-glow animate-pulse">
-                  <Sparkles className="h-12 w-12 text-white" />
-                </div>
-                <p className="text-xl font-medium">Mira is speaking...</p>
+          {/* Mode Selector with Tabs */}
+          <Tabs value={mode} onValueChange={(v) => setMode(v as 'voice' | 'chat')} className="w-full">
+            <TabsList className="grid w-full max-w-md mx-auto grid-cols-2">
+              <TabsTrigger value="voice" className="gap-2">
+                <Mic className="w-4 h-4" />
+                Voice Chat
+              </TabsTrigger>
+              <TabsTrigger value="chat" className="gap-2">
+                <MessageSquare className="w-4 h-4" />
+                Text Chat
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="voice" className="mt-8">
+              {/* Conversation Indicator */}
+              <div className="text-center py-12">
+                {isSpeaking ? (
+                  <div className="space-y-4 animate-fade-in">
+                    <div className="w-24 h-24 mx-auto rounded-full bg-gradient-fashion flex items-center justify-center shadow-glow animate-pulse">
+                      <Sparkles className="h-12 w-12 text-white" />
+                    </div>
+                    <p className="text-xl font-medium">Mira is speaking...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 animate-fade-in">
+                    <div className="w-24 h-24 mx-auto rounded-full bg-muted/50 flex items-center justify-center">
+                      <Sparkles className="h-12 w-12 text-muted-foreground" />
+                    </div>
+                    <p className="text-xl font-medium text-muted-foreground">
+                      Click below to start talking
+                    </p>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="space-y-4 animate-fade-in">
-                <div className="w-24 h-24 mx-auto rounded-full bg-muted/50 flex items-center justify-center">
-                  <Sparkles className="h-12 w-12 text-muted-foreground" />
-                </div>
-                <p className="text-xl font-medium text-muted-foreground">
-                  Click below to start chatting
-                </p>
+            </TabsContent>
+
+            <TabsContent value="chat" className="mt-8">
+              <div className="max-w-2xl mx-auto h-[600px]">
+                <ChatInterface onShowCamera={handleShowCamera} />
               </div>
-            )}
-          </div>
+            </TabsContent>
+          </Tabs>
 
           {/* Features */}
           <div className="grid md:grid-cols-3 gap-6 mt-12 animate-fade-in" style={{ animationDelay: '0.2s' }}>
             <div className="p-6 rounded-xl bg-card/50 backdrop-blur-sm border border-border/50 hover:shadow-elegant transition-all duration-300">
               <div className="w-12 h-12 rounded-full bg-gradient-fashion/20 flex items-center justify-center mb-4">
-                <Sparkles className="h-6 w-6 text-primary" />
+                <MessageSquare className="h-6 w-6 text-primary" />
               </div>
-              <h3 className="text-lg font-semibold mb-2">Voice Conversation</h3>
+              <h3 className="text-lg font-semibold mb-2">Voice & Text Chat</h3>
               <p className="text-muted-foreground">
-                Talk naturally with Mira and get instant fashion advice through voice.
+                Choose your preferred way to chat - speak naturally or type your questions.
               </p>
             </div>
 
@@ -248,15 +273,17 @@ const Index = () => {
               </div>
               <h3 className="text-lg font-semibold mb-2">Visual Analysis</h3>
               <p className="text-muted-foreground">
-                Say "see my outfit" and Mira will analyze your look in real-time with her camera.
+                Ask Mira to see your outfit and she'll analyze your look in real-time.
               </p>
             </div>
           </div>
         </div>
       </main>
 
-      {/* Voice Interface */}
-      <VoiceInterface onSpeakingChange={setIsSpeaking} onShowCamera={handleShowCamera} />
+      {/* Voice Interface - Only show in voice mode */}
+      {mode === 'voice' && (
+        <VoiceInterface onSpeakingChange={setIsSpeaking} onShowCamera={handleShowCamera} />
+      )}
 
       {/* Camera Modal */}
       <Dialog open={showCamera} onOpenChange={setShowCamera}>
