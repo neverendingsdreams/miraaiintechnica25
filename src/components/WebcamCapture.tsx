@@ -30,6 +30,12 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isAnalyzing })
         return;
       }
 
+      // First show the video element by setting streaming state
+      setIsStreaming(true);
+      
+      // Wait for next frame to ensure video element is rendered
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      
       console.log('Requesting camera permission...');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
@@ -41,15 +47,21 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isAnalyzing })
       
       console.log('Camera stream obtained:', stream);
       
+      // Check if video ref is available after rendering
+      if (!videoRef.current) {
+        console.error('Video ref is still null after rendering');
+        // Try one more time with a longer delay
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
       if (videoRef.current) {
+        console.log('Setting stream to video element...');
         videoRef.current.srcObject = stream;
-        console.log('Stream set to video element');
         
         videoRef.current.onloadedmetadata = () => {
           console.log('Video metadata loaded, playing video...');
           videoRef.current?.play().then(() => {
             console.log('Video playing successfully');
-            setIsStreaming(true);
             setIsCameraReady(true);
           }).catch(playError => {
             console.error('Error playing video:', playError);
@@ -58,6 +70,7 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isAnalyzing })
               description: "Failed to play camera feed. Please try again.",
               variant: "destructive"
             });
+            setIsStreaming(false);
           });
         };
         
@@ -68,12 +81,21 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isAnalyzing })
             description: "There was an error with the video element.",
             variant: "destructive"
           });
+          setIsStreaming(false);
         };
       } else {
-        console.error('Video ref is null');
+        console.error('Video ref is null - stopping stream');
+        stream.getTracks().forEach(track => track.stop());
+        setIsStreaming(false);
+        toast({
+          title: "Camera Setup Error",
+          description: "Failed to initialize video element. Please refresh and try again.",
+          variant: "destructive"
+        });
       }
     } catch (error: any) {
       console.error('Error accessing camera:', error);
+      setIsStreaming(false);
       
       let errorMessage = "Please allow camera access to use Mira AI.";
       
@@ -89,16 +111,19 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isAnalyzing })
         // Try again with minimal constraints
         try {
           console.log('Retrying with minimal constraints...');
+          setIsStreaming(true);
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          
           const simpleStream = await navigator.mediaDevices.getUserMedia({ video: true });
           if (videoRef.current) {
             videoRef.current.srcObject = simpleStream;
-            videoRef.current.play();
-            setIsStreaming(true);
+            await videoRef.current.play();
             setIsCameraReady(true);
             return;
           }
         } catch (retryError) {
           console.error('Retry failed:', retryError);
+          setIsStreaming(false);
         }
       }
       
