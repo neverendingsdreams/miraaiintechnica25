@@ -1,107 +1,12 @@
 import { useState } from 'react';
 import { Sparkles } from 'lucide-react';
-import WebcamCapture from '@/components/WebcamCapture';
-import AnalysisResults from '@/components/AnalysisResults';
+import VoiceInterface from '@/components/VoiceInterface';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
-  const [analysis, setAnalysis] = useState<string | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [currentAudioUrl, setCurrentAudioUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const handleCapture = async (imageData: string) => {
-    setIsAnalyzing(true);
-    setAnalysis(null);
-
-    try {
-      // Call analyze-outfit edge function
-      const { data, error } = await supabase.functions.invoke('analyze-outfit', {
-        body: { image: imageData }
-      });
-
-      if (error) throw error;
-
-      setAnalysis(data.analysis);
-      
-      toast({
-        title: "Analysis Complete!",
-        description: "Mira has reviewed your outfit. Check out the recommendations below!",
-      });
-    } catch (error: any) {
-      console.error('Analysis error:', error);
-      toast({
-        title: "Analysis Failed",
-        description: error.message || "Failed to analyze outfit. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  const handleSpeak = async () => {
-    if (!analysis || isSpeaking) return;
-
-    setIsSpeaking(true);
-
-    try {
-      // Stop current audio if playing
-      if (currentAudioUrl) {
-        const audio = document.querySelector('audio');
-        if (audio) {
-          audio.pause();
-          audio.remove();
-        }
-        URL.revokeObjectURL(currentAudioUrl);
-      }
-
-      // Call text-to-speech edge function
-      const { data, error } = await supabase.functions.invoke('text-to-speech', {
-        body: { 
-          text: analysis,
-          voice: 'Aria' // Using ElevenLabs Aria voice
-        }
-      });
-
-      if (error) throw error;
-
-      // Convert base64 to audio and play
-      const audioBlob = new Blob(
-        [Uint8Array.from(atob(data.audioContent), c => c.charCodeAt(0))],
-        { type: 'audio/mpeg' }
-      );
-      const audioUrl = URL.createObjectURL(audioBlob);
-      setCurrentAudioUrl(audioUrl);
-
-      const audio = new Audio(audioUrl);
-      audio.onended = () => {
-        setIsSpeaking(false);
-        URL.revokeObjectURL(audioUrl);
-        setCurrentAudioUrl(null);
-      };
-      audio.onerror = () => {
-        setIsSpeaking(false);
-        toast({
-          title: "Playback Error",
-          description: "Failed to play audio. Please try again.",
-          variant: "destructive"
-        });
-      };
-      
-      await audio.play();
-    } catch (error: any) {
-      console.error('Speech error:', error);
-      setIsSpeaking(false);
-      toast({
-        title: "Speech Failed",
-        description: error.message || "Failed to generate speech. Please try again.",
-        variant: "destructive"
-      });
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gradient-subtle">
@@ -123,63 +28,77 @@ const Index = () => {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8 max-w-6xl">
-        <div className="grid gap-8">
-          {/* Intro Section */}
-          <div className="text-center space-y-3">
-            <h2 className="text-4xl font-bold text-foreground">
-              Let's Style Your Look
+      <main className="container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto space-y-8">
+          {/* Introduction */}
+          <div className="text-center space-y-4 animate-fade-in">
+            <h2 className="text-4xl font-bold tracking-tight">
+              Talk to Your AI Fashion Assistant
             </h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Show me your outfit and I'll provide personalized fashion advice on colors, fit, 
-              style, and occasion-based recommendations to help you look your absolute best.
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              Have a natural conversation with Mira! Ask for fashion advice, outfit suggestions,
+              color coordination tips, and styling recommendations - all through voice.
             </p>
           </div>
 
-          {/* Webcam Section */}
-          <WebcamCapture onCapture={handleCapture} isAnalyzing={isAnalyzing} />
-
-          {/* Analysis Results */}
-          {analysis && (
-            <div className="animate-in fade-in-50 duration-500">
-              <AnalysisResults 
-                analysis={analysis} 
-                onSpeak={handleSpeak}
-                isSpeaking={isSpeaking}
-              />
-            </div>
-          )}
+          {/* Conversation Indicator */}
+          <div className="text-center py-12">
+            {isSpeaking ? (
+              <div className="space-y-4 animate-fade-in">
+                <div className="w-24 h-24 mx-auto rounded-full bg-gradient-fashion flex items-center justify-center shadow-glow animate-pulse">
+                  <Sparkles className="h-12 w-12 text-white" />
+                </div>
+                <p className="text-xl font-medium">Mira is speaking...</p>
+              </div>
+            ) : (
+              <div className="space-y-4 animate-fade-in">
+                <div className="w-24 h-24 mx-auto rounded-full bg-muted/50 flex items-center justify-center">
+                  <Sparkles className="h-12 w-12 text-muted-foreground" />
+                </div>
+                <p className="text-xl font-medium text-muted-foreground">
+                  Click below to start chatting
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* Features */}
-          {!analysis && (
-            <div className="grid md:grid-cols-3 gap-6 pt-8">
-              {[
-                {
-                  title: "Color Analysis",
-                  description: "Get expert advice on color harmony and combinations",
-                  icon: "🎨"
-                },
-                {
-                  title: "Fit & Style",
-                  description: "Receive personalized recommendations on fit and silhouette",
-                  icon: "✨"
-                },
-                {
-                  title: "Occasion Tips",
-                  description: "Learn how to style your outfit for any event",
-                  icon: "🌟"
-                }
-              ].map((feature, i) => (
-                <div key={i} className="p-6 rounded-xl bg-card border border-border/50 shadow-soft text-center space-y-3">
-                  <div className="text-4xl">{feature.icon}</div>
-                  <h3 className="text-lg font-semibold text-foreground">{feature.title}</h3>
-                  <p className="text-sm text-muted-foreground">{feature.description}</p>
-                </div>
-              ))}
+          <div className="grid md:grid-cols-3 gap-6 mt-12 animate-fade-in" style={{ animationDelay: '0.2s' }}>
+            <div className="p-6 rounded-xl bg-card/50 backdrop-blur-sm border border-border/50 hover:shadow-elegant transition-all duration-300">
+              <div className="w-12 h-12 rounded-full bg-gradient-fashion/20 flex items-center justify-center mb-4">
+                <Sparkles className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">Voice Conversation</h3>
+              <p className="text-muted-foreground">
+                Talk naturally with Mira and get instant fashion advice through voice.
+              </p>
             </div>
-          )}
+
+            <div className="p-6 rounded-xl bg-card/50 backdrop-blur-sm border border-border/50 hover:shadow-elegant transition-all duration-300">
+              <div className="w-12 h-12 rounded-full bg-gradient-fashion/20 flex items-center justify-center mb-4">
+                <Sparkles className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">Personalized Tips</h3>
+              <p className="text-muted-foreground">
+                Get tailored fashion recommendations based on your questions and preferences.
+              </p>
+            </div>
+
+            <div className="p-6 rounded-xl bg-card/50 backdrop-blur-sm border border-border/50 hover:shadow-elegant transition-all duration-300">
+              <div className="w-12 h-12 rounded-full bg-gradient-fashion/20 flex items-center justify-center mb-4">
+                <Sparkles className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">Real-Time Help</h3>
+              <p className="text-muted-foreground">
+                Get immediate responses to your fashion questions in a natural conversation.
+              </p>
+            </div>
+          </div>
         </div>
       </main>
+
+      {/* Voice Interface */}
+      <VoiceInterface onSpeakingChange={setIsSpeaking} />
     </div>
   );
 };
