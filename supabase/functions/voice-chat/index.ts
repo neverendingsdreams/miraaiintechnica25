@@ -11,10 +11,10 @@ serve(async (req) => {
   }
 
   try {
-    const { text, conversationHistory = [], userPreferences = null } = await req.json();
+    const { text, conversationHistory = [], userPreferences = null, imageData = null } = await req.json();
     
-    if (!text) {
-      throw new Error('No text provided');
+    if (!text && !imageData) {
+      throw new Error('No text or image provided');
     }
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -36,10 +36,10 @@ Use this information to provide personalized, relevant advice that matches their
     }
 
     // Build messages array with conversation history
-    const messages = [
+    const messages: any[] = [
       {
         role: 'system',
-        content: `You are Mira, an expert AI fashion stylist with years of experience in personal styling, color theory, and fashion trends. 
+        content: `You are Mira, an expert AI fashion stylist with years of experience in personal styling, color theory, and fashion trends.
 
 Your expertise includes:
 - Color coordination and harmony
@@ -73,10 +73,29 @@ Remember: You're having a conversation, so be concise and conversational. Use to
     }
 
     // Add current user message
-    messages.push({
-      role: 'user',
-      content: text
-    });
+    if (imageData) {
+      // If there's an image, send it with the message for vision analysis
+      messages.push({
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: text || "What do you think of this outfit?"
+          },
+          {
+            type: 'image_url',
+            image_url: {
+              url: imageData
+            }
+          }
+        ]
+      });
+    } else {
+      messages.push({
+        role: 'user',
+        content: text
+      });
+    }
 
     // Call Lovable AI for fashion advice with tool calling
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {

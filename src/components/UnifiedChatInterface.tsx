@@ -1,0 +1,429 @@
+import { useState, useRef, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Send, Loader2, Sparkles, Mic, MicOff, Image as ImageIcon, X } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  imageUrl?: string;
+  productLinks?: Array<{ title: string; url: string; price?: string }>;
+}
+
+interface UnifiedChatInterfaceProps {
+  onShowCamera: () => void;
+  onSpeakingChange: (speaking: boolean) => void;
+}
+
+export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange }: UnifiedChatInterfaceProps) => {
+  const { toast } = useToast();
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputText, setInputText] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [userPreferences, setUserPreferences] = useState<any>(null);
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null);
+  
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
+  const synthRef = useRef<SpeechSynthesis | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load user preferences
+  useEffect(() => {
+    const saved = localStorage.getItem('mira_user_preferences');
+    if (saved) {
+      try {
+        setUserPreferences(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to load user preferences');
+      }
+    }
+  }, []);
+
+  // Initialize speech recognition
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = 'en-US';
+
+      recognitionRef.current.onresult = async (event: any) => {
+        const speechResult = event.results[0][0].transcript;
+        setInputText(speechResult);
+        setIsListening(false);
+      };
+
+      recognitionRef.current.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        setIsListening(false);
+        if (event.error !== 'no-speech') {
+          toast({
+            title: "Speech Error",
+            description: "Failed to recognize speech. Please try again.",
+            variant: "destructive"
+          });
+        }
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+      };
+    }
+
+    synthRef.current = window.speechSynthesis;
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      if (synthRef.current) {
+        synthRef.current.cancel();
+      }
+    };
+  }, []);
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
+  // Update speaking state
+  useEffect(() => {
+    onSpeakingChange(isSpeaking);
+  }, [isSpeaking, onSpeakingChange]);
+
+  const startListening = async () => {
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      recognitionRef.current?.start();
+      setIsListening(true);
+      toast({
+        title: "Listening...",
+        description: "Speak now",
+      });
+    } catch (error) {
+      toast({
+        title: "Microphone Error",
+        description: "Please allow microphone access.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const stopListening = () => {
+    recognitionRef.current?.stop();
+    setIsListening(false);
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 20 * 1024 * 1024) {
+        toast({
+          title: "File too large",
+          description: "Please select an image under 20MB",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setUploadedImage(reader.result as string);
+        setUploadedImageFile(file);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeUploadedImage = () => {
+    setUploadedImage(null);
+    setUploadedImageFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const sendMessage = async () => {
+    if ((!inputText.trim() && !uploadedImage) || isProcessing) return;
+
+    const userMessage: Message = {
+      role: 'user',
+      content: inputText.trim() || "What do you think of this outfit?",
+      timestamp: new Date(),
+      imageUrl: uploadedImage || undefined,
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInputText('');
+    const currentImage = uploadedImage;
+    removeUploadedImage();
+    setIsProcessing(true);
+
+    try {
+      const conversationHistory = messages.map(msg => ({
+        role: msg.role,
+        content: msg.content,
+      }));
+
+      const requestBody: any = {
+        text: userMessage.content,
+        conversationHistory: [...conversationHistory, { role: 'user', content: userMessage.content }],
+        userPreferences,
+      };
+
+      // If there's an image, include it
+      if (currentImage) {
+        requestBody.imageData = currentImage;
+      }
+
+      const { data, error } = await supabase.functions.invoke('voice-chat', {
+        body: requestBody,
+      });
+
+      if (error) throw error;
+
+      if (data.action === 'show_camera') {
+        const confirmMessage: Message = {
+          role: 'assistant',
+          content: data.text || "Let me open the camera for you!",
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, confirmMessage]);
+        setTimeout(() => onShowCamera(), 500);
+        setIsProcessing(false);
+        return;
+      }
+
+      const assistantMessage: Message = {
+        role: 'assistant',
+        content: data.text,
+        timestamp: new Date(),
+        imageUrl: data.imageUrl,
+        productLinks: data.productLinks,
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+
+      // Speak the response
+      if (synthRef.current && data.text) {
+        synthRef.current.cancel();
+        const utterance = new SpeechSynthesisUtterance(data.text);
+        utterance.rate = 1.0;
+        
+        const voices = synthRef.current.getVoices();
+        const femaleVoice = voices.find(voice => 
+          voice.name.includes('Female') || 
+          voice.name.includes('Samantha') ||
+          voice.name.includes('Karen')
+        );
+        if (femaleVoice) {
+          utterance.voice = femaleVoice;
+        }
+
+        utterance.onstart = () => setIsSpeaking(true);
+        utterance.onend = () => setIsSpeaking(false);
+        
+        synthRef.current.speak(utterance);
+      }
+    } catch (error: any) {
+      console.error('Chat error:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send message. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-card border border-border rounded-lg shadow-lg">
+      {/* Header */}
+      <div className="flex items-center gap-3 p-4 border-b border-border bg-gradient-fashion rounded-t-lg">
+        <Sparkles className="w-5 h-5 text-white" />
+        <div>
+          <h3 className="font-semibold text-white">Chat with Mira</h3>
+          <p className="text-xs text-white/80">
+            {isSpeaking ? "Speaking..." : isListening ? "Listening..." : "Type, speak, or upload an image"}
+          </p>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <ScrollArea className="flex-1 p-4">
+        <div className="space-y-4">
+          {messages.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Sparkles className="w-12 h-12 mx-auto mb-3 text-primary/50" />
+              <p className="text-sm">Start a conversation with Mira!</p>
+              <p className="text-xs mt-2">Type, speak, or share an outfit photo for personalized advice.</p>
+            </div>
+          ) : (
+            messages.map((msg, idx) => (
+              <div
+                key={idx}
+                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                    msg.role === 'user'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-foreground'
+                  }`}
+                >
+                  {msg.imageUrl && msg.role === 'user' && (
+                    <img 
+                      src={msg.imageUrl} 
+                      alt="Uploaded outfit" 
+                      className="mb-2 rounded-lg max-w-full h-auto max-h-64 object-cover"
+                    />
+                  )}
+                  
+                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  
+                  {msg.imageUrl && msg.role === 'assistant' && (
+                    <img 
+                      src={msg.imageUrl} 
+                      alt="Outfit suggestion" 
+                      className="mt-2 rounded-lg max-w-full h-auto"
+                    />
+                  )}
+                  
+                  {msg.productLinks && msg.productLinks.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <p className="text-xs font-semibold opacity-80">Recommended Products:</p>
+                      {msg.productLinks.map((product, pIdx) => (
+                        <a
+                          key={pIdx}
+                          href={product.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block p-2 bg-background/50 rounded border border-border hover:bg-background transition-colors"
+                        >
+                          <p className="text-sm font-medium">{product.title}</p>
+                          {product.price && (
+                            <p className="text-xs opacity-70">{product.price}</p>
+                          )}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <p className="text-xs opacity-70 mt-1">
+                    {msg.timestamp.toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+          {isProcessing && (
+            <div className="flex justify-start">
+              <div className="bg-muted rounded-lg px-4 py-2">
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              </div>
+            </div>
+          )}
+          <div ref={scrollRef} />
+        </div>
+      </ScrollArea>
+
+      {/* Image Preview */}
+      {uploadedImage && (
+        <div className="px-4 pb-2">
+          <div className="relative inline-block">
+            <img 
+              src={uploadedImage} 
+              alt="Upload preview" 
+              className="max-h-32 rounded-lg border border-border"
+            />
+            <Button
+              size="icon"
+              variant="destructive"
+              className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+              onClick={removeUploadedImage}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Input Area */}
+      <div className="p-4 border-t border-border">
+        <div className="flex gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleImageUpload}
+          />
+          
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isProcessing}
+          >
+            <ImageIcon className="w-4 h-4" />
+          </Button>
+
+          <Button
+            size="icon"
+            variant={isListening ? "default" : "outline"}
+            onClick={isListening ? stopListening : startListening}
+            disabled={isProcessing}
+            className={isListening ? "bg-red-500 hover:bg-red-600" : ""}
+          >
+            {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+          </Button>
+
+          <Input
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={handleKeyPress}
+            placeholder="Type your message..."
+            disabled={isProcessing}
+            className="flex-1"
+          />
+          
+          <Button
+            onClick={sendMessage}
+            disabled={(!inputText.trim() && !uploadedImage) || isProcessing}
+            size="icon"
+            className="bg-gradient-fashion hover:opacity-90"
+          >
+            {isProcessing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
