@@ -96,6 +96,76 @@ All colors MUST be HSL.
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 345 70% 65%;
   }
+
+  .theme-colorful {
+    --background: 280 100% 98%;
+    --foreground: 280 80% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 280 80% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 280 80% 10%;
+
+    --primary: 280 80% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 160 70% 60%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 280 60% 95%;
+    --muted-foreground: 280 30% 40%;
+
+    --accent: 45 100% 60%;
+    --accent-foreground: 280 80% 10%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 280 40% 85%;
+    --input: 280 40% 85%;
+    --ring: 280 80% 60%;
+
+    --gradient-fashion: linear-gradient(135deg, hsl(280 80% 60%), hsl(160 70% 60%), hsl(45 100% 60%));
+    --gradient-subtle: linear-gradient(180deg, hsl(280 100% 98%), hsl(160 100% 98%));
+    --shadow-elegant: 0 10px 40px -10px hsl(280 80% 60% / 0.4);
+    --shadow-soft: 0 4px 20px -4px hsl(280 80% 60% / 0.2);
+  }
+
+  .theme-spooky {
+    --background: 280 20% 10%;
+    --foreground: 45 100% 70%;
+
+    --card: 280 15% 15%;
+    --card-foreground: 45 100% 70%;
+
+    --popover: 280 15% 15%;
+    --popover-foreground: 45 100% 70%;
+
+    --primary: 30 100% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 280 60% 40%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 280 15% 20%;
+    --muted-foreground: 45 60% 50%;
+
+    --accent: 120 100% 30%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 80% 30%;
+    --input: 30 80% 30%;
+    --ring: 30 100% 50%;
+
+    --gradient-fashion: linear-gradient(135deg, hsl(30 100% 50%), hsl(280 60% 30%));
+    --gradient-subtle: linear-gradient(180deg, hsl(280 20% 10%), hsl(0 0% 5%));
+    --shadow-elegant: 0 10px 40px -10px hsl(30 100% 50% / 0.5);
+    --shadow-soft: 0 4px 20px -4px hsl(30 100% 50% / 0.3);
+  }
 }
 
 @layer base {

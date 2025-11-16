@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.generate-tshirt-designs]
 verify_jwt = false
+
+[functions.search-products]
+verify_jwt = false

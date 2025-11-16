@@ -9,17 +9,20 @@ import { VirtualTryOn } from './VirtualTryOn';
 interface WebcamCaptureProps {
   onCapture: (imageData: string) => void;
   isAnalyzing: boolean;
+  onStreamReady?: (stream: MediaStream) => void;
 }
 
-const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isAnalyzing }) => {
+const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isAnalyzing, onStreamReady }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [gestureDetected, setGestureDetected] = useState<string | null>(null);
   const [showVirtualTryOn, setShowVirtualTryOn] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
   const gestureRecognizerRef = useRef<GestureRecognizer | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
 
   // Initialize gesture recognizer
@@ -48,12 +51,87 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isAnalyzing })
 
     initGestureRecognizer();
 
+  // Cleanup on unmount
+  useEffect(() => {
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
     };
   }, []);
+
+  const resetTimeout = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    
+    // Start countdown from 60 seconds
+    setCountdown(60);
+    const countdownInterval = setInterval(() => {
+      setCountdown(prev => {
+        if (prev === null || prev <= 1) {
+          clearInterval(countdownInterval);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    // Auto-close after 60 seconds
+    timeoutRef.current = setTimeout(() => {
+      toast({
+        title: "Camera Timeout",
+        description: "Camera closed due to inactivity",
+      });
+      stopCamera();
+    }, 60000);
+  }, [toast]);
+
+  const stopCamera = useCallback(() => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      setCountdown(null);
+    }
+    if (videoRef.current?.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    setIsStreaming(false);
+    setIsCameraReady(false);
+    setGestureDetected(null);
+  }, []);
+
+  const captureImage = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current || !isCameraReady) return;
+
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      setCountdown(null);
+    }
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0);
+      const imageData = canvas.toDataURL('image/jpeg', 0.8);
+      onCapture(imageData);
+    }
+  }, [onCapture, isCameraReady]);
 
   // Detect gestures from video
   const detectGestures = useCallback(() => {
@@ -74,13 +152,12 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isAnalyzing })
           setGestureDetected('Thumb_Up');
           console.log('Thumbs up detected!');
           
-          // Auto-capture after thumbs up
           setTimeout(() => {
             captureImage();
             setGestureDetected(null);
           }, 500);
           
-          return; // Stop detecting after capture
+          return;
         }
       }
     } catch (error) {
@@ -88,7 +165,7 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isAnalyzing })
     }
 
     animationFrameRef.current = requestAnimationFrame(detectGestures);
-  }, [isCameraReady, isAnalyzing]);
+  }, [isCameraReady, isAnalyzing, captureImage]);
 
   // Start gesture detection when camera is ready
   useEffect(() => {
@@ -145,6 +222,14 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isAnalyzing })
       if (videoRef.current) {
         console.log('Setting stream to video element...');
         videoRef.current.srcObject = stream;
+        
+        // Notify parent about stream
+        if (onStreamReady) {
+          onStreamReady(stream);
+        }
+
+        // Start 60 second timeout
+        resetTimeout();
         
         videoRef.current.onloadedmetadata = () => {
           console.log('Video metadata loaded, playing video...');
@@ -223,34 +308,6 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isAnalyzing })
     }
   }, [toast]);
 
-  const stopCamera = useCallback(() => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-    if (videoRef.current?.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-      setIsStreaming(false);
-      setIsCameraReady(false);
-      setGestureDetected(null);
-    }
-  }, []);
-
-  const captureImage = useCallback(() => {
-    if (!videoRef.current || !isCameraReady) return;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
-    
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.drawImage(videoRef.current, 0, 0);
-      const imageData = canvas.toDataURL('image/jpeg', 0.8);
-      onCapture(imageData);
-    }
-  }, [onCapture, isCameraReady]);
 
   if (showVirtualTryOn && isStreaming) {
     return <VirtualTryOn videoRef={videoRef} onClose={() => setShowVirtualTryOn(false)} />;
@@ -290,7 +347,12 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isAnalyzing })
               ref={canvasRef}
               className="absolute inset-0 w-full h-full pointer-events-none"
             />
-            {gestureDetected && (
+          {countdown !== null && countdown <= 10 && (
+            <div className="absolute top-4 right-4 bg-destructive text-destructive-foreground px-4 py-2 rounded-full font-semibold animate-pulse shadow-glow">
+              Camera closing in {countdown}s
+            </div>
+          )}
+          {gestureDetected && (
               <div className="absolute top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-full flex items-center gap-2 animate-pulse shadow-glow">
                 <Hand className="h-5 w-5" />
                 <span className="font-semibold">Thumbs Up Detected!</span>

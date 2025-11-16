@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Sparkles, History } from 'lucide-react';
 import VoiceInterface from '@/components/VoiceInterface';
 import WebcamCapture from '@/components/WebcamCapture';
 import { OutfitHistory } from '@/components/OutfitHistory';
+import { ThemeSelector } from '@/components/ThemeSelector';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -14,6 +15,7 @@ const Index = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const { toast } = useToast();
+  const cameraStreamRef = useRef<MediaStream | null>(null);
 
   const handleShowCamera = () => {
     setShowCamera(true);
@@ -67,7 +69,9 @@ const Index = () => {
         console.error('Error saving to database:', dbError);
       }
 
-      setShowCamera(false);
+      // Auto-close camera after successful analysis
+      stopCameraStream();
+      setTimeout(() => setShowCamera(false), 500);
 
       // Speak the analysis
       const synth = window.speechSynthesis;
@@ -96,6 +100,7 @@ const Index = () => {
       });
     } catch (error: any) {
       console.error('Analysis error:', error);
+      stopCameraStream();
       setShowCamera(false);
       toast({
         title: "Analysis Failed",
@@ -104,6 +109,14 @@ const Index = () => {
       });
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const stopCameraStream = () => {
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach(track => track.stop());
+      cameraStreamRef.current = null;
+      console.log('Camera stream stopped');
     }
   };
 
