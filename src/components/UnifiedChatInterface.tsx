@@ -17,9 +17,10 @@ interface Message {
 interface UnifiedChatInterfaceProps {
   onShowCamera: () => void;
   onSpeakingChange: (speaking: boolean) => void;
+  onAnalyzeOutfit?: (imageData: string) => Promise<void>;
 }
 
-export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange }: UnifiedChatInterfaceProps) => {
+export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyzeOutfit }: UnifiedChatInterfaceProps) => {
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -436,14 +437,40 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange }: Unified
               muted
               className="w-full max-w-md rounded-lg"
             />
-            <Button
-              size="sm"
-              onClick={captureLiveFrame}
-              className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-gradient-fashion"
-            >
-              <Camera className="h-4 w-4 mr-2" />
-              Capture Frame
-            </Button>
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+              <Button
+                size="sm"
+                onClick={captureLiveFrame}
+                className="bg-gradient-fashion"
+              >
+                <Camera className="h-4 w-4 mr-2" />
+                Capture Frame
+              </Button>
+              {onAnalyzeOutfit && (
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    if (!liveVideoRef.current) return;
+                    
+                    const video = liveVideoRef.current;
+                    const canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                      ctx.drawImage(video, 0, 0);
+                      const imageData = canvas.toDataURL('image/jpeg');
+                      await onAnalyzeOutfit(imageData);
+                    }
+                  }}
+                  className="bg-gradient-fashion"
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Analyze Outfit
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       )}
