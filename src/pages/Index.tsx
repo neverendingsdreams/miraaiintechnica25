@@ -1,9 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Sparkles, History } from 'lucide-react';
 import VoiceInterface from '@/components/VoiceInterface';
 import WebcamCapture from '@/components/WebcamCapture';
 import { OutfitHistory } from '@/components/OutfitHistory';
 import { ThemeSelector } from '@/components/ThemeSelector';
+import { PersonalizationQuiz, QuizAnswers } from '@/components/PersonalizationQuiz';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -14,8 +15,33 @@ const Index = () => {
   const [showCamera, setShowCamera] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showQuiz, setShowQuiz] = useState(false);
   const { toast } = useToast();
   const cameraStreamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    const hasCompletedQuiz = localStorage.getItem('mira_user_preferences');
+    if (!hasCompletedQuiz) {
+      setShowQuiz(true);
+    }
+  }, []);
+
+  const handleQuizComplete = (answers: QuizAnswers) => {
+    localStorage.setItem('mira_user_preferences', JSON.stringify(answers));
+    setShowQuiz(false);
+    toast({
+      title: "Profile Saved!",
+      description: "Mira will now provide personalized recommendations just for you.",
+    });
+  };
+
+  const handleQuizSkip = () => {
+    setShowQuiz(false);
+    toast({
+      title: "Skipped for Now",
+      description: "You can always personalize your experience later from settings.",
+    });
+  };
 
   const handleShowCamera = () => {
     setShowCamera(true);
@@ -123,6 +149,15 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-subtle">
+      <ThemeSelector />
+      
+      {showQuiz && (
+        <PersonalizationQuiz 
+          onComplete={handleQuizComplete}
+          onSkip={handleQuizSkip}
+        />
+      )}
+      
       {/* Header */}
       <header className="border-b border-border/50 bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-6">

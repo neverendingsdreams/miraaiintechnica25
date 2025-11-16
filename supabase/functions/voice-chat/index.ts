@@ -11,15 +11,28 @@ serve(async (req) => {
   }
 
   try {
-    const { text, conversationHistory, isProactive } = await req.json();
+    const { text, conversationHistory = [], userPreferences = null } = await req.json();
     
-    if (!text && !isProactive) {
+    if (!text) {
       throw new Error('No text provided');
     }
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
       throw new Error('LOVABLE_API_KEY not configured');
+    }
+
+    // Build personalized context from user preferences
+    let personalizationContext = '';
+    if (userPreferences) {
+      personalizationContext = `\n\nUser's Style Profile:
+- Preferred Style: ${userPreferences.style}
+- Favorite Colors: ${userPreferences.colors}
+- Common Occasions: ${userPreferences.occasions}
+- Fit Preference: ${userPreferences.bodyType}
+- Budget Range: ${userPreferences.budget}
+
+Use this information to provide personalized, relevant advice that matches their preferences.`;
     }
 
     // Build messages array with conversation history
@@ -43,7 +56,7 @@ Communication style:
 - Ask follow-up questions to understand user needs
 - Use fashion terminology but explain when needed
 
-${isProactive ? `PROACTIVE MODE: Share interesting fashion tips, seasonal trends, styling tricks, color combinations, or outfit ideas. Be brief and engaging - just 1-2 sentences. Topics can include: wardrobe essentials, upcoming trends, styling hacks, color psychology, fabric care, accessorizing tips, or seasonal transitions.` : ''}
+${personalizationContext}
 
 When the user wants you to see their outfit (phrases like "see my outfit", "check my look", "analyze my clothes", "what do you think of this"), use the show_camera tool.
 
@@ -56,18 +69,11 @@ Remember: You're having a voice conversation, so be concise and conversational.`
       messages.push(...conversationHistory);
     }
 
-    // Add current user message if not proactive
-    if (!isProactive && text) {
-      messages.push({
-        role: 'user',
-        content: text
-      });
-    } else if (isProactive) {
-      messages.push({
-        role: 'user',
-        content: 'Share a quick fashion tip or styling advice'
-      });
-    }
+    // Add current user message
+    messages.push({
+      role: 'user',
+      content: text
+    });
 
     // Call Lovable AI for fashion advice with tool calling
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
