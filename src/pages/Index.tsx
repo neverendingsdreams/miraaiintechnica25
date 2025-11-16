@@ -216,20 +216,28 @@ const Index = () => {
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto space-y-8">
           {/* Logo Hero Section */}
-          <div className="flex justify-center animate-fade-in">
+          <div className="flex flex-col items-center gap-6 animate-fade-in">
             <img 
               src={miraLogo} 
               alt="Mira AI Fashion Stylist" 
-              className="h-48 w-48 object-contain animate-float hover-scale transition-all duration-500 drop-shadow-elegant"
+              className="h-72 w-72 object-contain animate-float hover-scale transition-all duration-500 drop-shadow-elegant"
             />
+            <div className="text-center space-y-3">
+              <h1 className="text-5xl font-bold bg-gradient-fashion bg-clip-text text-transparent">
+                MiraAI: Your personal AI fashion stylist
+              </h1>
+              <p className="text-2xl text-muted-foreground font-light italic">
+                Where fashion moves with you
+              </p>
+            </div>
           </div>
           
           {/* Introduction */}
           <div className="text-center space-y-4 animate-fade-in" style={{ animationDelay: '0.2s' }}>
-            <h2 className="text-4xl font-bold tracking-tight">
+            <h2 className="text-3xl font-semibold tracking-tight">
               Chat with Your AI Fashion Assistant
             </h2>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
               Have a natural conversation with Mira! Type, speak, or share outfit photos for personalized fashion advice.
             </p>
           </div>
