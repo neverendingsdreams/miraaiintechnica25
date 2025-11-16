@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Loader2, Sparkles, Mic, MicOff, Image as ImageIcon, X, Video, VideoOff, Camera } from 'lucide-react';
+import { Send, Loader2, Sparkles, Mic, MicOff, Image as ImageIcon, X, Video, VideoOff, Camera, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -32,8 +32,12 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
   const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null);
   const [isLiveCameraActive, setIsLiveCameraActive] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [isMonitoring, setIsMonitoring] = useState(false);
+  const [liveAnalysis, setLiveAnalysis] = useState<string>('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   
   const scrollRef = useRef<HTMLDivElement>(null);
+  const monitoringIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const recognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -94,6 +98,9 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
       }
       if (cameraStream) {
         cameraStream.getTracks().forEach(track => track.stop());
+      }
+      if (monitoringIntervalRef.current) {
+        clearInterval(monitoringIntervalRef.current);
       }
     };
   }, []);
@@ -162,9 +169,104 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
     }
   };
 
+  const analyzeLiveOutfit = async () => {
+    if (!liveVideoRef.current || isAnalyzing) return;
+    
+    setIsAnalyzing(true);
+    const video = liveVideoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0);
+      const imageData = canvas.toDataURL('image/jpeg');
+      
+      try {
+        const { data, error } = await supabase.functions.invoke('analyze-outfit', {
+          body: { image: imageData }
+        });
+        
+        if (error) throw error;
+        
+        setLiveAnalysis(data.analysis);
+        
+        // Speak the analysis
+        if (synthRef.current) {
+          synthRef.current.cancel();
+          const utterance = new SpeechSynthesisUtterance(data.analysis);
+          utterance.rate = 1.0;
+          
+          const voices = synthRef.current.getVoices();
+          const femaleVoice = voices.find(voice => 
+            voice.name.includes('Female') || 
+            voice.name.includes('Samantha') ||
+            voice.name.includes('Karen') ||
+            voice.name.includes('Moira')
+          );
+          if (femaleVoice) {
+            utterance.voice = femaleVoice;
+          }
+          
+          utterance.onstart = () => setIsSpeaking(true);
+          utterance.onend = () => setIsSpeaking(false);
+          
+          synthRef.current.speak(utterance);
+        }
+      } catch (error: any) {
+        console.error('Analysis error:', error);
+        toast({
+          title: "Analysis Failed",
+          description: error.message || "Failed to analyze outfit",
+          variant: "destructive"
+        });
+      }
+    }
+    
+    setIsAnalyzing(false);
+  };
+
+  const toggleMonitoring = () => {
+    if (isMonitoring) {
+      // Stop monitoring
+      if (monitoringIntervalRef.current) {
+        clearInterval(monitoringIntervalRef.current);
+        monitoringIntervalRef.current = null;
+      }
+      setIsMonitoring(false);
+      setLiveAnalysis('');
+      toast({
+        title: "Monitoring Stopped",
+        description: "Continuous outfit analysis has been stopped",
+      });
+    } else {
+      // Start monitoring
+      setIsMonitoring(true);
+      analyzeLiveOutfit(); // Immediate first analysis
+      
+      // Then analyze every 10 seconds
+      monitoringIntervalRef.current = setInterval(() => {
+        analyzeLiveOutfit();
+      }, 10000);
+      
+      toast({
+        title: "Monitoring Started",
+        description: "Mira will analyze your outfit every 10 seconds",
+      });
+    }
+  };
+
   const toggleLiveCamera = async () => {
     if (isLiveCameraActive) {
-      // Stop camera
+      // Stop camera and monitoring
+      if (monitoringIntervalRef.current) {
+        clearInterval(monitoringIntervalRef.current);
+        monitoringIntervalRef.current = null;
+      }
+      setIsMonitoring(false);
+      setLiveAnalysis('');
+      
       if (cameraStream) {
         cameraStream.getTracks().forEach(track => track.stop());
         setCameraStream(null);
@@ -429,48 +531,100 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
       {/* Live Camera Feed */}
       {isLiveCameraActive && (
         <div className="px-4 pb-2 bg-accent/50">
-          <div className="relative rounded-lg overflow-hidden">
-            <video
-              ref={liveVideoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full max-w-md rounded-lg"
-            />
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-              <Button
-                size="sm"
-                onClick={captureLiveFrame}
-                className="bg-gradient-fashion"
-              >
-                <Camera className="h-4 w-4 mr-2" />
-                Capture Frame
-              </Button>
-              {onAnalyzeOutfit && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="relative rounded-lg overflow-hidden">
+              <video
+                ref={liveVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full rounded-lg"
+              />
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
                 <Button
                   size="sm"
-                  onClick={async () => {
-                    if (!liveVideoRef.current) return;
-                    
-                    const video = liveVideoRef.current;
-                    const canvas = document.createElement('canvas');
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    
-                    const ctx = canvas.getContext('2d');
-                    if (ctx) {
-                      ctx.drawImage(video, 0, 0);
-                      const imageData = canvas.toDataURL('image/jpeg');
-                      await onAnalyzeOutfit(imageData);
-                    }
-                  }}
+                  onClick={captureLiveFrame}
                   className="bg-gradient-fashion"
+                  disabled={isAnalyzing}
                 >
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Analyze Outfit
+                  <Camera className="h-4 w-4 mr-2" />
+                  Capture
                 </Button>
+                {onAnalyzeOutfit && (
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      if (!liveVideoRef.current) return;
+                      
+                      const video = liveVideoRef.current;
+                      const canvas = document.createElement('canvas');
+                      canvas.width = video.videoWidth;
+                      canvas.height = video.videoHeight;
+                      
+                      const ctx = canvas.getContext('2d');
+                      if (ctx) {
+                        ctx.drawImage(video, 0, 0);
+                        const imageData = canvas.toDataURL('image/jpeg');
+                        await onAnalyzeOutfit(imageData);
+                      }
+                    }}
+                    className="bg-gradient-fashion"
+                    disabled={isAnalyzing}
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Analyze
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant={isMonitoring ? "default" : "outline"}
+                  onClick={toggleMonitoring}
+                  className={isMonitoring ? "bg-gradient-fashion" : ""}
+                  disabled={isAnalyzing}
+                >
+                  {isMonitoring ? <Eye className="h-4 w-4 mr-2" /> : <EyeOff className="h-4 w-4 mr-2" />}
+                  {isMonitoring ? "Monitoring" : "Monitor"}
+                </Button>
+              </div>
+              
+              {/* Analysis status indicator */}
+              {isAnalyzing && (
+                <div className="absolute top-4 right-4 bg-primary/90 text-primary-foreground px-3 py-1 rounded-full flex items-center gap-2">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span className="text-xs font-medium">Analyzing...</span>
+                </div>
               )}
             </div>
+            
+            {/* Live Analysis Panel */}
+            {(isMonitoring || liveAnalysis) && (
+              <div className="bg-gradient-to-br from-primary/10 to-accent/10 rounded-lg p-4 border border-border">
+                <div className="flex items-center gap-2 mb-3">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  <h3 className="font-semibold text-lg">Live Feedback</h3>
+                  {isMonitoring && (
+                    <span className="ml-auto text-xs bg-primary/20 text-primary px-2 py-1 rounded-full">
+                      Active
+                    </span>
+                  )}
+                </div>
+                
+                {liveAnalysis ? (
+                  <div className="space-y-2">
+                    <p className="text-sm leading-relaxed">{liveAnalysis}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {isMonitoring ? 'Next analysis in 10 seconds...' : 'Start monitoring for continuous feedback'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-32">
+                    <p className="text-sm text-muted-foreground text-center">
+                      {isMonitoring ? 'Analyzing your outfit...' : 'Click "Monitor" to start continuous analysis'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
