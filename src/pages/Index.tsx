@@ -186,10 +186,11 @@ const Index = () => {
 
           {/* Unified Chat Interface */}
           <div className="max-w-4xl mx-auto h-[700px]">
-            <UnifiedChatInterface 
-              onShowCamera={handleShowCamera}
-              onSpeakingChange={setIsSpeaking}
-            />
+      <UnifiedChatInterface 
+        onShowCamera={handleShowCamera}
+        onSpeakingChange={setIsSpeaking}
+        onAnalyzeOutfit={handleCapture}
+      />
           </div>
 
           {/* Features */}
