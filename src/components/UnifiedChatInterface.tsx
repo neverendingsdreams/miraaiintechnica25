@@ -266,13 +266,27 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
             };
             await audio.play();
           } else {
-            setIsSpeaking(false);
-            onSpeakingChange(false);
+            // Fallback to browser TTS
+            const synth = window.speechSynthesis;
+            const utter = new SpeechSynthesisUtterance(data.analysis);
+            utter.onend = () => {
+              setIsSpeaking(false);
+              onSpeakingChange(false);
+            };
+            synth.cancel();
+            synth.speak(utter);
           }
         } catch (error) {
           console.error('Text-to-speech error:', error);
-          setIsSpeaking(false);
-          onSpeakingChange(false);
+          // Fallback to browser TTS
+          const synth = window.speechSynthesis;
+          const utter = new SpeechSynthesisUtterance(data.analysis);
+          utter.onend = () => {
+            setIsSpeaking(false);
+            onSpeakingChange(false);
+          };
+          synth.cancel();
+          synth.speak(utter);
         }
       } catch (error: any) {
         console.error('Analysis error:', error);
@@ -398,13 +412,27 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
           };
           await audio.play();
         } else {
-          setIsSpeaking(false);
-          onSpeakingChange(false);
+          // Fallback to browser TTS
+          const synth = window.speechSynthesis;
+          const utter = new SpeechSynthesisUtterance(responseText);
+          utter.onend = () => {
+            setIsSpeaking(false);
+            onSpeakingChange(false);
+          };
+          synth.cancel();
+          synth.speak(utter);
         }
       } catch (error) {
         console.error('Text-to-speech error:', error);
-        setIsSpeaking(false);
-        onSpeakingChange(false);
+        // Fallback to browser TTS
+        const synth = window.speechSynthesis;
+        const utter = new SpeechSynthesisUtterance(responseText);
+        utter.onend = () => {
+          setIsSpeaking(false);
+          onSpeakingChange(false);
+        };
+        synth.cancel();
+        synth.speak(utter);
       }
 
     } catch (error) {
@@ -621,13 +649,27 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
             };
             await audio.play();
           } else {
-            setIsSpeaking(false);
-            onSpeakingChange(false);
+            // Fallback to browser TTS
+            const synth = window.speechSynthesis;
+            const utter = new SpeechSynthesisUtterance(data.text);
+            utter.onend = () => {
+              setIsSpeaking(false);
+              onSpeakingChange(false);
+            };
+            synth.cancel();
+            synth.speak(utter);
           }
         } catch (error) {
           console.error('Text-to-speech error:', error);
-          setIsSpeaking(false);
-          onSpeakingChange(false);
+          // Fallback to browser TTS
+          const synth = window.speechSynthesis;
+          const utter = new SpeechSynthesisUtterance(data.text);
+          utter.onend = () => {
+            setIsSpeaking(false);
+            onSpeakingChange(false);
+          };
+          synth.cancel();
+          synth.speak(utter);
         }
       }
     } catch (error: any) {
