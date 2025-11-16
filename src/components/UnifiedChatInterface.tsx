@@ -250,27 +250,29 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
         
         setLiveAnalysis(data.analysis);
         
-        // Speak the analysis
-        if (synthRef.current) {
-          synthRef.current.cancel();
-          const utterance = new SpeechSynthesisUtterance(data.analysis);
-          utterance.rate = 1.0;
-          
-          const voices = synthRef.current.getVoices();
-          const femaleVoice = voices.find(voice => 
-            voice.name.includes('Female') || 
-            voice.name.includes('Samantha') ||
-            voice.name.includes('Karen') ||
-            voice.name.includes('Moira')
-          );
-          if (femaleVoice) {
-            utterance.voice = femaleVoice;
+        // Speak the analysis using ElevenLabs
+        setIsSpeaking(true);
+        onSpeakingChange(true);
+        try {
+          const { data: audioData, error: ttsError } = await supabase.functions.invoke('text-to-speech', {
+            body: { text: data.analysis, voice: 'Aria' }
+          });
+
+          if (!ttsError && audioData?.audioContent) {
+            const audio = new Audio(`data:audio/mpeg;base64,${audioData.audioContent}`);
+            audio.onended = () => {
+              setIsSpeaking(false);
+              onSpeakingChange(false);
+            };
+            await audio.play();
+          } else {
+            setIsSpeaking(false);
+            onSpeakingChange(false);
           }
-          
-          utterance.onstart = () => setIsSpeaking(true);
-          utterance.onend = () => setIsSpeaking(false);
-          
-          synthRef.current.speak(utterance);
+        } catch (error) {
+          console.error('Text-to-speech error:', error);
+          setIsSpeaking(false);
+          onSpeakingChange(false);
         }
       } catch (error: any) {
         console.error('Analysis error:', error);
@@ -379,21 +381,30 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
       // Update live analysis display
       setLiveAnalysis(responseText);
 
-      // Play audio response if available
-      if (audioData && synthRef.current) {
-        const audio = new Audio(audioData);
-        audio.play();
-        setIsSpeaking(true);
-        audio.onended = () => setIsSpeaking(false);
-      } else if (synthRef.current) {
-        // Fallback to browser TTS
-        synthRef.current.cancel();
-        const utterance = new SpeechSynthesisUtterance(responseText);
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.onstart = () => setIsSpeaking(true);
-        utterance.onend = () => setIsSpeaking(false);
-        synthRef.current.speak(utterance);
+      // Play audio response using ElevenLabs
+      setIsSpeaking(true);
+      onSpeakingChange(true);
+      
+      try {
+        const { data: audioData, error: ttsError } = await supabase.functions.invoke('text-to-speech', {
+          body: { text: responseText, voice: 'Aria' }
+        });
+
+        if (!ttsError && audioData?.audioContent) {
+          const audio = new Audio(`data:audio/mpeg;base64,${audioData.audioContent}`);
+          audio.onended = () => {
+            setIsSpeaking(false);
+            onSpeakingChange(false);
+          };
+          await audio.play();
+        } else {
+          setIsSpeaking(false);
+          onSpeakingChange(false);
+        }
+      } catch (error) {
+        console.error('Text-to-speech error:', error);
+        setIsSpeaking(false);
+        onSpeakingChange(false);
       }
 
     } catch (error) {
@@ -592,26 +603,32 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
 
       setMessages(prev => [...prev, assistantMessage]);
 
-      // Speak the response
-      if (synthRef.current && data.text) {
-        synthRef.current.cancel();
-        const utterance = new SpeechSynthesisUtterance(data.text);
-        utterance.rate = 1.0;
+      // Speak the response using ElevenLabs
+      if (data.text) {
+        setIsSpeaking(true);
+        onSpeakingChange(true);
         
-        const voices = synthRef.current.getVoices();
-        const femaleVoice = voices.find(voice => 
-          voice.name.includes('Female') || 
-          voice.name.includes('Samantha') ||
-          voice.name.includes('Karen')
-        );
-        if (femaleVoice) {
-          utterance.voice = femaleVoice;
-        }
+        try {
+          const { data: audioData, error: ttsError } = await supabase.functions.invoke('text-to-speech', {
+            body: { text: data.text, voice: 'Aria' }
+          });
 
-        utterance.onstart = () => setIsSpeaking(true);
-        utterance.onend = () => setIsSpeaking(false);
-        
-        synthRef.current.speak(utterance);
+          if (!ttsError && audioData?.audioContent) {
+            const audio = new Audio(`data:audio/mpeg;base64,${audioData.audioContent}`);
+            audio.onended = () => {
+              setIsSpeaking(false);
+              onSpeakingChange(false);
+            };
+            await audio.play();
+          } else {
+            setIsSpeaking(false);
+            onSpeakingChange(false);
+          }
+        } catch (error) {
+          console.error('Text-to-speech error:', error);
+          setIsSpeaking(false);
+          onSpeakingChange(false);
+        }
       }
     } catch (error: any) {
       console.error('Chat error:', error);
