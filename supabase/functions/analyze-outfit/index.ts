@@ -17,10 +17,13 @@ serve(async (req) => {
       throw new Error('No image provided');
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
+    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+    if (!GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY not configured');
     }
+
+    // Extract base64 data from data URL
+    const base64Data = image.split(',')[1];
 
     // Prepare the prompt for fashion analysis
     const systemPrompt = `You are Mira, an expert fashion stylist. Provide SHORT, concise outfit feedback in 2-3 sentences max.
@@ -32,38 +35,32 @@ Include:
 
 Keep it warm, friendly, and BRIEF. Voice-friendly length only.`;
 
-    // Call Lovable AI Gateway with vision model
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    // Call Gemini API directly
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=' + GEMINI_API_KEY, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
+        contents: [
           {
-            role: 'system',
-            content: systemPrompt
-          },
-          {
-            role: 'user',
-            content: [
+            parts: [
               {
-                type: 'text',
-                text: 'Please analyze this outfit and provide your expert fashion advice.'
+                text: systemPrompt + '\n\nPlease analyze this outfit and provide your expert fashion advice.'
               },
               {
-                type: 'image_url',
-                image_url: {
-                  url: image
+                inline_data: {
+                  mime_type: 'image/jpeg',
+                  data: base64Data
                 }
               }
             ]
           }
         ],
-        max_tokens: 150,
-        temperature: 0.8
+        generationConfig: {
+          temperature: 0.8,
+          maxOutputTokens: 150
+        }
       }),
     });
 
@@ -82,10 +79,10 @@ Keep it warm, friendly, and BRIEF. Voice-friendly length only.`;
     }
 
     const data = await response.json();
-    const analysis = data.choices?.[0]?.message?.content;
+    const analysis = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!analysis) {
-      throw new Error('No analysis returned from AI');
+      throw new Error('No analysis returned from Gemini');
     }
 
     console.log('Analysis completed successfully');

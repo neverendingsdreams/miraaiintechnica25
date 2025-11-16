@@ -17,11 +17,11 @@ serve(async (req) => {
       throw new Error('No message or image provided');
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     const ELEVENLABS_API_KEY = Deno.env.get('ELEVENLABS_API_KEY');
     
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
+    if (!GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY not configured');
     }
 
     // Prepare conversation context
@@ -34,54 +34,61 @@ Guidelines:
 - Be warm, encouraging, and professional
 - If asked about what you see, describe the outfit briefly and provide feedback`;
 
-    // Build messages array
-    const messages: any[] = [
-      { role: 'system', content: systemPrompt }
-    ];
+    // Build Gemini contents array
+    const contents: any[] = [];
 
-    // Add conversation history
+    // Add conversation history in Gemini format
     if (conversationHistory && conversationHistory.length > 0) {
-      messages.push(...conversationHistory);
+      for (const msg of conversationHistory) {
+        contents.push({
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: msg.content }]
+        });
+      }
     }
 
-    // Build user message
-    const userContent: any[] = [];
+    // Build current user message parts
+    const currentParts: any[] = [];
     
     if (message) {
-      userContent.push({
-        type: 'text',
-        text: message
+      currentParts.push({
+        text: systemPrompt + '\n\n' + message
+      });
+    } else {
+      currentParts.push({
+        text: systemPrompt + '\n\nPlease analyze this outfit.'
       });
     }
     
     if (imageData) {
-      userContent.push({
-        type: 'image_url',
-        image_url: {
-          url: imageData
+      const base64Data = imageData.split(',')[1];
+      currentParts.push({
+        inline_data: {
+          mime_type: 'image/jpeg',
+          data: base64Data
         }
       });
     }
 
-    messages.push({
+    contents.push({
       role: 'user',
-      content: userContent
+      parts: currentParts
     });
 
-    console.log('Calling Lovable AI with', messages.length, 'messages');
+    console.log('Calling Gemini API with', contents.length, 'messages');
 
-    // Call Lovable AI Gateway
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    // Call Gemini API directly
+    const aiResponse = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=' + GEMINI_API_KEY, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages,
-        max_tokens: 200,
-        temperature: 0.8
+        contents,
+        generationConfig: {
+          temperature: 0.8,
+          maxOutputTokens: 200
+        }
       }),
     });
 
@@ -100,10 +107,10 @@ Guidelines:
     }
 
     const aiData = await aiResponse.json();
-    const responseText = aiData.choices?.[0]?.message?.content;
+    const responseText = aiData.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!responseText) {
-      throw new Error('No response from AI');
+      throw new Error('No response from Gemini');
     }
 
     console.log('AI response received:', responseText.substring(0, 100));
