@@ -1,9 +1,10 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { Camera, Loader2, Sparkles, Hand } from 'lucide-react';
+import { Camera, Loader2, Sparkles, Hand, Shirt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { GestureRecognizer, FilesetResolver, DrawingUtils } from '@mediapipe/tasks-vision';
+import { VirtualTryOn } from './VirtualTryOn';
 
 interface WebcamCaptureProps {
   onCapture: (imageData: string) => void;
@@ -16,6 +17,7 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isAnalyzing })
   const [isStreaming, setIsStreaming] = useState(false);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [gestureDetected, setGestureDetected] = useState<string | null>(null);
+  const [showVirtualTryOn, setShowVirtualTryOn] = useState(false);
   const gestureRecognizerRef = useRef<GestureRecognizer | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const { toast } = useToast();
@@ -250,6 +252,10 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isAnalyzing })
     }
   }, [onCapture, isCameraReady]);
 
+  if (showVirtualTryOn && isStreaming) {
+    return <VirtualTryOn videoRef={videoRef} onClose={() => setShowVirtualTryOn(false)} />;
+  }
+
   return (
     <Card className="overflow-hidden bg-gradient-subtle border-border/50 shadow-elegant">
       <div className="relative aspect-video bg-muted/30">
@@ -300,7 +306,7 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isAnalyzing })
               <span className="text-muted-foreground">Show 👍 to capture</span>
             </div>
             <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-background/95 to-transparent">
-              <div className="flex gap-3 justify-center">
+              <div className="flex flex-wrap gap-3 justify-center">
                 <Button
                   onClick={captureImage}
                   disabled={isAnalyzing || !isCameraReady}
@@ -320,8 +326,17 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, isAnalyzing })
                   )}
                 </Button>
                 <Button
-                  onClick={stopCamera}
+                  onClick={() => setShowVirtualTryOn(true)}
+                  disabled={!isCameraReady || isAnalyzing}
+                  size="lg"
                   variant="secondary"
+                >
+                  <Shirt className="mr-2 h-5 w-5" />
+                  Try Different T-shirts
+                </Button>
+                <Button
+                  onClick={stopCamera}
+                  variant="outline"
                   size="lg"
                   disabled={isAnalyzing}
                 >
