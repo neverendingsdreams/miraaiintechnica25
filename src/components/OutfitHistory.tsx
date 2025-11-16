@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Calendar, Sparkles } from 'lucide-react';
+import { Loader2, Calendar, Sparkles, Trash2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { SuggestionPanel } from './SuggestionPanel';
 
@@ -27,6 +28,8 @@ export const OutfitHistory = () => {
   const [selectedOutfit, setSelectedOutfit] = useState<OutfitAnalysis | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
+  const [showClearAllDialog, setShowClearAllDialog] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -58,6 +61,58 @@ export const OutfitHistory = () => {
   const handleOutfitClick = (outfit: OutfitAnalysis) => {
     setSelectedOutfit(outfit);
     setSuggestions([]);
+  };
+
+  const handleDeleteOne = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('outfit_analyses')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setHistory(prev => prev.filter(item => item.id !== id));
+      setItemToDelete(null);
+      
+      toast({
+        title: "Deleted",
+        description: "Outfit analysis removed from history."
+      });
+    } catch (error: any) {
+      console.error('Error deleting item:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete item. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleClearAll = async () => {
+    try {
+      const { error } = await supabase
+        .from('outfit_analyses')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+
+      if (error) throw error;
+
+      setHistory([]);
+      setShowClearAllDialog(false);
+      
+      toast({
+        title: "History Cleared",
+        description: "All outfit analyses have been removed."
+      });
+    } catch (error: any) {
+      console.error('Error clearing history:', error);
+      toast({
+        title: "Error",
+        description: "Failed to clear history. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleGetSuggestions = async () => {
@@ -124,28 +179,54 @@ export const OutfitHistory = () => {
   return (
     <>
       <div className="space-y-4">
-        <h2 className="text-2xl font-bold text-foreground">Your Outfit History</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-foreground">Your Outfit History</h2>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => setShowClearAllDialog(true)}
+            className="flex items-center gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            Clear All
+          </Button>
+        </div>
         <ScrollArea className="h-[600px]">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pr-4">
             {history.map((item) => (
               <Card 
                 key={item.id} 
-                className="overflow-hidden hover:shadow-elegant transition-shadow cursor-pointer"
-                onClick={() => handleOutfitClick(item)}
+                className="overflow-hidden hover:shadow-elegant transition-shadow group relative"
               >
-                <div className="aspect-square relative bg-muted">
-                  <img
-                    src={item.image_url}
-                    alt="Outfit"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="p-4 space-y-2">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Calendar className="h-3 w-3" />
-                    <span>{new Date(item.created_at).toLocaleDateString()}</span>
+                <Button
+                  size="icon"
+                  variant="destructive"
+                  className="absolute top-2 right-2 z-10 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setItemToDelete(item.id);
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+                <div 
+                  className="cursor-pointer"
+                  onClick={() => handleOutfitClick(item)}
+                >
+                  <div className="aspect-square relative bg-muted">
+                    <img
+                      src={item.image_url}
+                      alt="Outfit"
+                      className="w-full h-full object-cover"
+                    />
                   </div>
-                  <p className="text-sm text-foreground line-clamp-4">{item.analysis}</p>
+                  <div className="p-4 space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Calendar className="h-3 w-3" />
+                      <span>{new Date(item.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <p className="text-sm text-foreground line-clamp-4">{item.analysis}</p>
+                  </div>
                 </div>
               </Card>
             ))}
@@ -210,6 +291,45 @@ export const OutfitHistory = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Clear All Confirmation Dialog */}
+      <AlertDialog open={showClearAllDialog} onOpenChange={setShowClearAllDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear All History?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all {history.length} outfit analyses from your history. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearAll} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Clear All
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Single Item Confirmation Dialog */}
+      <AlertDialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete This Outfit?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this outfit analysis from your history. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => itemToDelete && handleDeleteOne(itemToDelete)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };
