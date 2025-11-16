@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Loader2, Sparkles, Mic, MicOff, Image as ImageIcon, X } from 'lucide-react';
+import { Send, Loader2, Sparkles, Mic, MicOff, Image as ImageIcon, X, Video, VideoOff, Camera } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -29,11 +29,14 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange }: Unified
   const [userPreferences, setUserPreferences] = useState<any>(null);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null);
+  const [isLiveCameraActive, setIsLiveCameraActive] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const liveVideoRef = useRef<HTMLVideoElement>(null);
 
   // Load user preferences
   useEffect(() => {
@@ -87,6 +90,9 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange }: Unified
       }
       if (synthRef.current) {
         synthRef.current.cancel();
+      }
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
       }
     };
   }, []);
@@ -154,6 +160,75 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange }: Unified
       fileInputRef.current.value = '';
     }
   };
+
+  const toggleLiveCamera = async () => {
+    if (isLiveCameraActive) {
+      // Stop camera
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        setCameraStream(null);
+      }
+      setIsLiveCameraActive(false);
+    } else {
+      // Start camera
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: 'user' } 
+        });
+        setCameraStream(stream);
+        setIsLiveCameraActive(true);
+        
+        if (liveVideoRef.current) {
+          liveVideoRef.current.srcObject = stream;
+        }
+        
+        toast({
+          title: "Camera Active",
+          description: "Live feed is now visible to Mira",
+        });
+      } catch (error) {
+        toast({
+          title: "Camera Error",
+          description: "Failed to access camera. Please check permissions.",
+          variant: "destructive"
+        });
+      }
+    }
+  };
+
+  const captureLiveFrame = () => {
+    if (!liveVideoRef.current || !isLiveCameraActive) return;
+    
+    const video = liveVideoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0);
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const file = new File([blob], 'live-capture.jpg', { type: 'image/jpeg' });
+          const imageUrl = URL.createObjectURL(blob);
+          setUploadedImage(imageUrl);
+          setUploadedImageFile(file);
+          
+          toast({
+            title: "Frame Captured",
+            description: "Image ready to send",
+          });
+        }
+      }, 'image/jpeg', 0.95);
+    }
+  };
+
+  // Update video stream when ref changes
+  useEffect(() => {
+    if (liveVideoRef.current && cameraStream) {
+      liveVideoRef.current.srcObject = cameraStream;
+    }
+  }, [cameraStream, isLiveCameraActive]);
 
   const sendMessage = async () => {
     if ((!inputText.trim() && !uploadedImage) || isProcessing) return;
@@ -350,6 +425,29 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange }: Unified
         </div>
       </ScrollArea>
 
+      {/* Live Camera Feed */}
+      {isLiveCameraActive && (
+        <div className="px-4 pb-2 bg-accent/50">
+          <div className="relative rounded-lg overflow-hidden">
+            <video
+              ref={liveVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full max-w-md rounded-lg"
+            />
+            <Button
+              size="sm"
+              onClick={captureLiveFrame}
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-gradient-fashion"
+            >
+              <Camera className="h-4 w-4 mr-2" />
+              Capture Frame
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Image Preview */}
       {uploadedImage && (
         <div className="px-4 pb-2">
@@ -389,6 +487,16 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange }: Unified
             disabled={isProcessing}
           >
             <ImageIcon className="w-4 h-4" />
+          </Button>
+
+          <Button
+            size="icon"
+            variant={isLiveCameraActive ? "default" : "outline"}
+            onClick={toggleLiveCamera}
+            disabled={isProcessing}
+            className={isLiveCameraActive ? "bg-gradient-fashion" : ""}
+          >
+            {isLiveCameraActive ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
           </Button>
 
           <Button
