@@ -10,6 +10,8 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  imageUrl?: string;
+  productLinks?: Array<{ title: string; url: string; price?: string }>;
 }
 
 interface ChatInterfaceProps {
@@ -90,6 +92,8 @@ export const ChatInterface = ({ onShowCamera }: ChatInterfaceProps) => {
         role: 'assistant',
         content: data.text,
         timestamp: new Date(),
+        imageUrl: data.imageUrl,
+        productLinks: data.productLinks,
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -146,6 +150,37 @@ export const ChatInterface = ({ onShowCamera }: ChatInterfaceProps) => {
                   }`}
                 >
                   <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  
+                  {/* Display image if present */}
+                  {msg.imageUrl && (
+                    <img 
+                      src={msg.imageUrl} 
+                      alt="Outfit suggestion" 
+                      className="mt-2 rounded-lg max-w-full h-auto"
+                    />
+                  )}
+                  
+                  {/* Display product links if present */}
+                  {msg.productLinks && msg.productLinks.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <p className="text-xs font-semibold opacity-80">Recommended Products:</p>
+                      {msg.productLinks.map((product, pIdx) => (
+                        <a
+                          key={pIdx}
+                          href={product.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block p-2 bg-background/50 rounded border border-border hover:bg-background transition-colors"
+                        >
+                          <p className="text-sm font-medium">{product.title}</p>
+                          {product.price && (
+                            <p className="text-xs opacity-70">{product.price}</p>
+                          )}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  
                   <p className="text-xs opacity-70 mt-1">
                     {msg.timestamp.toLocaleTimeString([], {
                       hour: '2-digit',
