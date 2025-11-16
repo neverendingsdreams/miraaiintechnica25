@@ -1,15 +1,18 @@
 import { useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, History } from 'lucide-react';
 import VoiceInterface from '@/components/VoiceInterface';
 import WebcamCapture from '@/components/WebcamCapture';
+import { OutfitHistory } from '@/components/OutfitHistory';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 const Index = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const { toast } = useToast();
 
   const handleShowCamera = () => {
@@ -20,7 +23,29 @@ const Index = () => {
     setIsAnalyzing(true);
     
     try {
-      // Analyze outfit with AI
+      console.log('Uploading image to storage...');
+      
+      // Convert base64 to blob
+      const base64Response = await fetch(imageData);
+      const blob = await base64Response.blob();
+      
+      // Upload to Supabase Storage
+      const fileName = `outfit-${Date.now()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from('outfit-images')
+        .upload(fileName, blob, {
+          contentType: 'image/jpeg',
+          cacheControl: '3600'
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('outfit-images')
+        .getPublicUrl(fileName);
+
+      console.log('Analyzing outfit...');
       const { data, error } = await supabase.functions.invoke('analyze-outfit', {
         body: { image: imageData }
       });
@@ -30,7 +55,18 @@ const Index = () => {
       const analysis = data.analysis;
       console.log('Analysis:', analysis);
 
-      // Close camera modal
+      // Save to database
+      const { error: dbError } = await supabase
+        .from('outfit_analyses')
+        .insert({
+          image_url: publicUrl,
+          analysis
+        });
+
+      if (dbError) {
+        console.error('Error saving to database:', dbError);
+      }
+
       setShowCamera(false);
 
       // Speak the analysis
@@ -55,8 +91,8 @@ const Index = () => {
       synth.speak(utterance);
 
       toast({
-        title: "Analysis Complete!",
-        description: "Listen to Mira's fashion advice!",
+        title: "Outfit Saved!",
+        description: "Analysis saved to your history. Check it out in the History tab.",
       });
     } catch (error: any) {
       console.error('Analysis error:', error);
@@ -77,16 +113,26 @@ const Index = () => {
       {/* Header */}
       <header className="border-b border-border/50 bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center gap-3">
-            <div className="rounded-full bg-gradient-fashion p-3 shadow-elegant">
-              <Sparkles className="h-6 w-6 text-white" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="rounded-full bg-gradient-fashion p-3 shadow-elegant">
+                <Sparkles className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold bg-gradient-fashion bg-clip-text text-transparent">
+                  Mira AI
+                </h1>
+                <p className="text-sm text-muted-foreground">Your Personal Fashion Stylist</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-fashion bg-clip-text text-transparent">
-                Mira AI
-              </h1>
-              <p className="text-sm text-muted-foreground">Your Personal Fashion Stylist</p>
-            </div>
+            <Button
+              onClick={() => setShowHistory(!showHistory)}
+              variant="outline"
+              className="gap-2"
+            >
+              <History className="h-4 w-4" />
+              {showHistory ? 'Hide' : 'History'}
+            </Button>
           </div>
         </div>
       </header>
@@ -166,16 +212,20 @@ const Index = () => {
 
       {/* Camera Modal */}
       <Dialog open={showCamera} onOpenChange={setShowCamera}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Show Me Your Outfit!</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="max-w-3xl">
           <WebcamCapture 
             onCapture={handleCapture}
             isAnalyzing={isAnalyzing}
           />
         </DialogContent>
       </Dialog>
+
+      {/* Outfit History Section */}
+      {showHistory && (
+        <div className="container mx-auto px-4 py-12">
+          <OutfitHistory />
+        </div>
+      )}
     </div>
   );
 };
