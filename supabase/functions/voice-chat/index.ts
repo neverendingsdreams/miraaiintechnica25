@@ -11,9 +11,9 @@ serve(async (req) => {
   }
 
   try {
-    const { text } = await req.json();
+    const { text, conversationHistory, isProactive } = await req.json();
     
-    if (!text) {
+    if (!text && !isProactive) {
       throw new Error('No text provided');
     }
 
@@ -22,19 +22,11 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
-    // Call Lovable AI for fashion advice with tool calling
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          {
-            role: 'system',
-            content: `You are Mira, an expert AI fashion stylist with years of experience in personal styling, color theory, and fashion trends. 
+    // Build messages array with conversation history
+    const messages = [
+      {
+        role: 'system',
+        content: `You are Mira, an expert AI fashion stylist with years of experience in personal styling, color theory, and fashion trends. 
 
 Your expertise includes:
 - Color coordination and harmony
@@ -51,15 +43,42 @@ Communication style:
 - Ask follow-up questions to understand user needs
 - Use fashion terminology but explain when needed
 
+${isProactive ? `PROACTIVE MODE: Share interesting fashion tips, seasonal trends, styling tricks, color combinations, or outfit ideas. Be brief and engaging - just 1-2 sentences. Topics can include: wardrobe essentials, upcoming trends, styling hacks, color psychology, fabric care, accessorizing tips, or seasonal transitions.` : ''}
+
 When the user wants you to see their outfit (phrases like "see my outfit", "check my look", "analyze my clothes", "what do you think of this"), use the show_camera tool.
 
 Remember: You're having a voice conversation, so be concise and conversational.`
-          },
-          {
-            role: 'user',
-            content: text
-          }
-        ],
+      }
+    ];
+
+    // Add conversation history if provided
+    if (conversationHistory && Array.isArray(conversationHistory)) {
+      messages.push(...conversationHistory);
+    }
+
+    // Add current user message if not proactive
+    if (!isProactive && text) {
+      messages.push({
+        role: 'user',
+        content: text
+      });
+    } else if (isProactive) {
+      messages.push({
+        role: 'user',
+        content: 'Share a quick fashion tip or styling advice'
+      });
+    }
+
+    // Call Lovable AI for fashion advice with tool calling
+    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages,
         tools: [
           {
             type: 'function',

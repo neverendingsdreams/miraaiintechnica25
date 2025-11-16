@@ -15,8 +15,11 @@ const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps)
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [continuousMode, setContinuousMode] = useState(false);
+  const [conversationHistory, setConversationHistory] = useState<Array<{role: string, content: string}>>([]);
   const recognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
+  const continuousModeTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Initialize Web Speech API
@@ -96,13 +99,22 @@ const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps)
     };
   }, []);
 
-  const processUserInput = async (text: string) => {
+  const processUserInput = async (text: string, isProactive = false) => {
     setIsProcessing(true);
     
     try {
+      // Add user message to history if not proactive
+      if (!isProactive && text) {
+        setConversationHistory(prev => [...prev, { role: 'user', content: text }]);
+      }
+
       // Call edge function for AI response
       const { data, error } = await supabase.functions.invoke('voice-chat', {
-        body: { text }
+        body: { 
+          text,
+          conversationHistory,
+          isProactive
+        }
       });
 
       if (error) throw error;
@@ -142,6 +154,11 @@ const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps)
 
       const responseText = data.text;
       console.log('Mira says:', responseText);
+
+      // Add assistant response to conversation history
+      if (responseText) {
+        setConversationHistory(prev => [...prev, { role: 'assistant', content: responseText }]);
+      }
 
       // Speak the response
       if (synthRef.current && responseText) {
@@ -264,17 +281,72 @@ const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps)
     });
   };
 
+  // Continuous mode: Proactive fashion tips every 30-60 seconds
+  useEffect(() => {
+    if (!continuousMode) {
+      if (continuousModeTimerRef.current) {
+        clearTimeout(continuousModeTimerRef.current);
+        continuousModeTimerRef.current = null;
+      }
+      return;
+    }
+
+    const scheduleNextTip = () => {
+      // Random interval between 30-60 seconds
+      const interval = 30000 + Math.random() * 30000;
+      
+      continuousModeTimerRef.current = setTimeout(() => {
+        // Only speak if not currently processing or speaking
+        if (!isProcessing && !isSpeaking && !isListening) {
+          console.log('Delivering proactive fashion tip...');
+          processUserInput('', true); // isProactive = true
+        }
+        scheduleNextTip();
+      }, interval);
+    };
+
+    scheduleNextTip();
+
+    return () => {
+      if (continuousModeTimerRef.current) {
+        clearTimeout(continuousModeTimerRef.current);
+      }
+    };
+  }, [continuousMode, isProcessing, isSpeaking, isListening]);
+
+  const toggleContinuousMode = () => {
+    const newMode = !continuousMode;
+    setContinuousMode(newMode);
+    
+    toast({
+      title: newMode ? "Continuous Mode Enabled" : "Continuous Mode Disabled",
+      description: newMode 
+        ? "Mira will share fashion tips every 30-60 seconds" 
+        : "Proactive tips disabled",
+    });
+  };
+
   return (
-    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50">
+    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-3">
       {!isListening && !isProcessing && !isSpeaking ? (
-        <Button
-          onClick={startListening}
-          size="lg"
-          className="rounded-full px-8 py-6 shadow-elegant hover:shadow-glow transition-all duration-300 bg-gradient-fashion hover:scale-105"
-        >
-          <Mic className="mr-2 h-5 w-5" />
-          Talk to Mira
-        </Button>
+        <>
+          <Button
+            onClick={startListening}
+            size="lg"
+            className="rounded-full px-8 py-6 shadow-elegant hover:shadow-glow transition-all duration-300 bg-gradient-fashion hover:scale-105"
+          >
+            <Mic className="mr-2 h-5 w-5" />
+            Talk to Mira
+          </Button>
+          <Button
+            onClick={toggleContinuousMode}
+            variant={continuousMode ? "default" : "outline"}
+            size="sm"
+            className={continuousMode ? "bg-gradient-fashion animate-pulse" : ""}
+          >
+            {continuousMode ? "Continuous Mode ON" : "Enable Continuous Mode"}
+          </Button>
+        </>
       ) : (
         <div className="flex flex-col items-center gap-2">
           <div className={`rounded-full p-4 ${isListening ? 'bg-red-500/20 animate-pulse' : isSpeaking ? 'bg-green-500/20 animate-pulse' : 'bg-accent'} transition-all duration-300`}>
