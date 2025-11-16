@@ -111,17 +111,16 @@ export const PersonalizationQuiz = ({ onComplete, onSkip }: PersonalizationQuizP
   };
 
   return (
-    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl">
-        <CardHeader>
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="w-5 h-5 text-primary" />
-            <CardTitle>Let's Personalize Your Experience</CardTitle>
-          </div>
-          <CardDescription>
-            Question {currentQuestion + 1} of {questions.length}
-          </CardDescription>
-        </CardHeader>
+    <Card className="w-full max-w-2xl mx-auto">
+      <CardHeader>
+        <div className="flex items-center gap-2 mb-2">
+          <Sparkles className="w-5 h-5 text-primary" />
+          <CardTitle>Let's Personalize Your Experience</CardTitle>
+        </div>
+        <CardDescription>
+          Question {currentQuestion + 1} of {questions.length}
+        </CardDescription>
+      </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">{currentQ.question}</h3>
@@ -187,6 +186,5 @@ export const PersonalizationQuiz = ({ onComplete, onSkip }: PersonalizationQuizP
           </div>
         </CardContent>
       </Card>
-    </div>
   );
 };
