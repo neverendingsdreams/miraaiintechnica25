@@ -79,10 +79,18 @@ Keep it warm, friendly, and BRIEF. Voice-friendly length only.`;
     }
 
     const data = await response.json();
+    console.log('Gemini API response:', JSON.stringify(data));
+    
+    // Check for blocked content or safety issues
+    if (data.promptFeedback?.blockReason) {
+      throw new Error(`Content blocked: ${data.promptFeedback.blockReason}`);
+    }
+    
     const analysis = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!analysis) {
-      throw new Error('No analysis returned from Gemini');
+      console.error('No text in response. Full response:', JSON.stringify(data));
+      throw new Error('No analysis returned from Gemini. The response may have been filtered.');
     }
 
     console.log('Analysis completed successfully');
