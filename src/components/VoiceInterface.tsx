@@ -6,9 +6,10 @@ import { supabase } from '@/integrations/supabase/client';
 
 interface VoiceInterfaceProps {
   onSpeakingChange: (speaking: boolean) => void;
+  onShowCamera: () => void;
 }
 
-const VoiceInterface = ({ onSpeakingChange }: VoiceInterfaceProps) => {
+const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps) => {
   const { toast } = useToast();
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -80,6 +81,39 @@ const VoiceInterface = ({ onSpeakingChange }: VoiceInterfaceProps) => {
       });
 
       if (error) throw error;
+
+      // Check if AI wants to show camera
+      if (data.action === 'show_camera') {
+        console.log('Opening camera for outfit analysis');
+        
+        // Speak the message first
+        if (synthRef.current && data.text) {
+          const utterance = new SpeechSynthesisUtterance(data.text);
+          utterance.rate = 1.0;
+          
+          const voices = synthRef.current.getVoices();
+          const femaleVoice = voices.find(voice => 
+            voice.name.includes('Female') || 
+            voice.name.includes('Samantha') ||
+            voice.name.includes('Karen') ||
+            voice.name.includes('Moira')
+          );
+          if (femaleVoice) {
+            utterance.voice = femaleVoice;
+          }
+
+          utterance.onend = () => {
+            onShowCamera();
+            setIsProcessing(false);
+          };
+
+          synthRef.current.speak(utterance);
+        } else {
+          onShowCamera();
+          setIsProcessing(false);
+        }
+        return;
+      }
 
       const responseText = data.text;
       console.log('Mira says:', responseText);
