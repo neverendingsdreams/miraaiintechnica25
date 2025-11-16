@@ -223,11 +223,11 @@ const Index = () => {
               className="h-72 w-72 object-contain animate-float hover-scale transition-all duration-500 drop-shadow-elegant"
             />
             <div className="text-center space-y-3">
-              <h1 className="text-5xl font-bold bg-gradient-fashion bg-clip-text text-transparent">
-                MiraAI: Your personal AI fashion stylist
+              <h1 className="text-5xl font-bold bg-gradient-spooky bg-clip-text text-transparent">
+                MiraAI: Your Personal AI Fashion Stylist
               </h1>
               <p className="text-2xl text-muted-foreground font-light italic">
-                Where fashion moves with you
+                Where Fashion Moves With You
               </p>
             </div>
           </div>
