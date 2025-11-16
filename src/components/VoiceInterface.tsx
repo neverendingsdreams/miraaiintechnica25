@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Loader2 } from 'lucide-react';
+import { Mic, MicOff, Loader2, Square } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -13,6 +13,7 @@ const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps)
   const { toast } = useToast();
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
   const recognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
@@ -145,6 +146,7 @@ const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps)
       // Speak the response
       if (synthRef.current && responseText) {
         onSpeakingChange(true);
+        setIsSpeaking(true);
         
         const utterance = new SpeechSynthesisUtterance(responseText);
         utterance.rate = 1.0;
@@ -165,11 +167,13 @@ const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps)
 
         utterance.onend = () => {
           onSpeakingChange(false);
+          setIsSpeaking(false);
           setIsProcessing(false);
         };
 
         utterance.onerror = () => {
           onSpeakingChange(false);
+          setIsSpeaking(false);
           setIsProcessing(false);
           toast({
             title: "Playback Error",
@@ -242,12 +246,27 @@ const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps)
     }
     setIsListening(false);
     setIsProcessing(false);
+    setIsSpeaking(false);
     onSpeakingChange(false);
+  };
+
+  const stopSpeaking = () => {
+    if (synthRef.current) {
+      synthRef.current.cancel();
+    }
+    setIsSpeaking(false);
+    setIsProcessing(false);
+    onSpeakingChange(false);
+    
+    toast({
+      title: "Stopped",
+      description: "Mira stopped speaking.",
+    });
   };
 
   return (
     <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50">
-      {!isListening && !isProcessing ? (
+      {!isListening && !isProcessing && !isSpeaking ? (
         <Button
           onClick={startListening}
           size="lg"
@@ -258,7 +277,7 @@ const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps)
         </Button>
       ) : (
         <div className="flex flex-col items-center gap-2">
-          <div className={`rounded-full p-4 ${isListening ? 'bg-red-500/20 animate-pulse' : 'bg-accent'} transition-all duration-300`}>
+          <div className={`rounded-full p-4 ${isListening ? 'bg-red-500/20 animate-pulse' : isSpeaking ? 'bg-green-500/20 animate-pulse' : 'bg-accent'} transition-all duration-300`}>
             {isProcessing ? (
               <Loader2 className="h-8 w-8 text-accent-foreground animate-spin" />
             ) : (
@@ -266,22 +285,36 @@ const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps)
             )}
           </div>
           <p className="text-sm text-muted-foreground text-center max-w-xs">
-            {isListening ? 'Listening...' : isProcessing ? 'Mira is thinking...' : 'Processing...'}
+            {isListening ? 'Listening...' : isSpeaking ? 'Mira is speaking...' : isProcessing ? 'Mira is thinking...' : 'Processing...'}
           </p>
           {transcript && (
             <p className="text-xs text-muted-foreground text-center max-w-xs italic">
               "{transcript}"
             </p>
           )}
-          <Button
-            onClick={stopListening}
-            variant="secondary"
-            size="sm"
-            className="mt-2"
-          >
-            <MicOff className="mr-2 h-4 w-4" />
-            Stop
-          </Button>
+          <div className="flex gap-2 mt-2">
+            {isSpeaking && (
+              <Button
+                onClick={stopSpeaking}
+                variant="destructive"
+                size="sm"
+                className="animate-pulse"
+              >
+                <Square className="mr-2 h-4 w-4" />
+                Stop Mira
+              </Button>
+            )}
+            {!isSpeaking && (
+              <Button
+                onClick={stopListening}
+                variant="secondary"
+                size="sm"
+              >
+                <MicOff className="mr-2 h-4 w-4" />
+                Cancel
+              </Button>
+            )}
+          </div>
         </div>
       )}
     </div>
