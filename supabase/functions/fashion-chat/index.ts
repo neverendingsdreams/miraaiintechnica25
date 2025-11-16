@@ -87,7 +87,7 @@ Guidelines:
         contents,
         generationConfig: {
           temperature: 0.8,
-          maxOutputTokens: 200
+          maxOutputTokens: 500
         }
       }),
     });
