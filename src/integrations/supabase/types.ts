@@ -20,18 +20,21 @@ export type Database = {
           created_at: string | null
           id: string
           image_url: string
+          user_id: string
         }
         Insert: {
           analysis: string
           created_at?: string | null
           id?: string
           image_url: string
+          user_id: string
         }
         Update: {
           analysis?: string
           created_at?: string | null
           id?: string
           image_url?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -44,6 +47,7 @@ export type Database = {
           outfit_analysis_id: string | null
           search_term: string
           suggestion_text: string
+          user_id: string
         }
         Insert: {
           created_at?: string | null
@@ -53,6 +57,7 @@ export type Database = {
           outfit_analysis_id?: string | null
           search_term: string
           suggestion_text: string
+          user_id: string
         }
         Update: {
           created_at?: string | null
@@ -62,6 +67,7 @@ export type Database = {
           outfit_analysis_id?: string | null
           search_term?: string
           suggestion_text?: string
+          user_id?: string
         }
         Relationships: [
           {
