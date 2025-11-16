@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { Settings as SettingsIcon, Sparkles, Trash2, RefreshCw } from 'lucide-react';
+import { Settings as SettingsIcon, Sparkles, Trash2, RefreshCw, ArrowLeft } from 'lucide-react';
 import { QuizAnswers } from '@/components/PersonalizationQuiz';
 import {
   AlertDialog,
@@ -90,10 +90,14 @@ const Settings = () => {
               You haven't completed your style profile yet.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             <Button onClick={() => navigate('/quiz')} className="w-full gap-2">
               <Sparkles className="w-4 h-4" />
               Take the Quiz
+            </Button>
+            <Button onClick={() => navigate('/')} variant="outline" className="w-full gap-2">
+              <ArrowLeft className="w-4 h-4" />
+              Back to Home
             </Button>
           </CardContent>
         </Card>
@@ -105,6 +109,16 @@ const Settings = () => {
     <div className="min-h-screen bg-gradient-subtle">
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-3xl mx-auto space-y-6">
+          {/* Back Button */}
+          <Button
+            variant="ghost"
+            onClick={() => navigate('/')}
+            className="gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Home
+          </Button>
+
           {/* Header */}
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
