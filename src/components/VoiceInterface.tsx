@@ -283,11 +283,14 @@ const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps)
 
   // Continuous mode: Proactive fashion tips every 30-60 seconds
   useEffect(() => {
+    // Clear any existing timer first
+    if (continuousModeTimerRef.current) {
+      clearTimeout(continuousModeTimerRef.current);
+      continuousModeTimerRef.current = null;
+    }
+
+    // Only schedule tips if continuous mode is explicitly enabled
     if (!continuousMode) {
-      if (continuousModeTimerRef.current) {
-        clearTimeout(continuousModeTimerRef.current);
-        continuousModeTimerRef.current = null;
-      }
       return;
     }
 
@@ -296,23 +299,33 @@ const VoiceInterface = ({ onSpeakingChange, onShowCamera }: VoiceInterfaceProps)
       const interval = 30000 + Math.random() * 30000;
       
       continuousModeTimerRef.current = setTimeout(() => {
-        // Only speak if not currently processing or speaking
-        if (!isProcessing && !isSpeaking && !isListening) {
+        // Only speak if not currently processing, speaking, or listening
+        // AND continuous mode is still active
+        if (continuousMode && !isProcessing && !isSpeaking && !isListening) {
           console.log('Delivering proactive fashion tip...');
           processUserInput('', true); // isProactive = true
         }
-        scheduleNextTip();
+        // Only reschedule if continuous mode is still active
+        if (continuousMode) {
+          scheduleNextTip();
+        }
       }, interval);
     };
 
-    scheduleNextTip();
+    // Add a 2-second delay before the first tip when continuous mode is enabled
+    setTimeout(() => {
+      if (continuousMode) {
+        scheduleNextTip();
+      }
+    }, 2000);
 
     return () => {
       if (continuousModeTimerRef.current) {
         clearTimeout(continuousModeTimerRef.current);
+        continuousModeTimerRef.current = null;
       }
     };
-  }, [continuousMode, isProcessing, isSpeaking, isListening]);
+  }, [continuousMode]);
 
   const toggleContinuousMode = () => {
     const newMode = !continuousMode;
