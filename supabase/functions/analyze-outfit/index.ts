@@ -23,20 +23,14 @@ serve(async (req) => {
     }
 
     // Prepare the prompt for fashion analysis
-    const systemPrompt = `You are Mira, an expert fashion stylist with years of experience in personal styling, color theory, and fashion trends. 
+    const systemPrompt = `You are Mira, an expert fashion stylist. Provide SHORT, concise outfit feedback in 2-3 sentences max.
 
-Your role is to analyze outfits and provide friendly, confidence-boosting feedback that helps people look and feel their best.
+Include:
+- Quick positive comment about what works
+- One specific tip to enhance the look
+- Brief confidence boost
 
-When analyzing an outfit, provide:
-1. **Overall Impression**: Start with an encouraging, positive comment about the outfit
-2. **Color Analysis**: Discuss color choices, harmony, and complementary colors
-3. **Fit & Silhouette**: Comment on how the pieces fit and their proportions
-4. **Style Assessment**: Identify the style (casual, formal, trendy, classic, etc.)
-5. **Recommendations**: Suggest 2-3 specific improvements or alternatives
-6. **Occasion Tips**: Suggest what occasions this outfit works best for
-7. **Confidence Boost**: End with an uplifting, personalized compliment
-
-Keep your tone warm, friendly, and supportive - like talking to a close friend. Be specific and actionable. Focus on what works well before suggesting improvements.`;
+Keep it warm, friendly, and BRIEF. Voice-friendly length only.`;
 
     // Call Lovable AI Gateway with vision model
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -68,7 +62,7 @@ Keep your tone warm, friendly, and supportive - like talking to a close friend. 
             ]
           }
         ],
-        max_tokens: 1000,
+        max_tokens: 150,
         temperature: 0.8
       }),
     });
