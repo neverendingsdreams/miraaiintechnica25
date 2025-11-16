@@ -86,26 +86,23 @@ const Index = () => {
       stopCameraStream();
       setTimeout(() => setShowCamera(false), 500);
 
-      // Speak the analysis
-      const synth = window.speechSynthesis;
-      const utterance = new SpeechSynthesisUtterance(analysis);
-      utterance.rate = 1.0;
-      
-      const voices = synth.getVoices();
-      const femaleVoice = voices.find(voice => 
-        voice.name.includes('Female') || 
-        voice.name.includes('Samantha') ||
-        voice.name.includes('Karen') ||
-        voice.name.includes('Moira')
-      );
-      if (femaleVoice) {
-        utterance.voice = femaleVoice;
-      }
+      // Speak the analysis using ElevenLabs
+      setIsSpeaking(true);
+      try {
+        const { data: audioData, error: ttsError } = await supabase.functions.invoke('text-to-speech', {
+          body: { text: analysis, voice: 'Aria' }
+        });
 
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      
-      synth.speak(utterance);
+        if (ttsError) throw ttsError;
+
+        // Play audio
+        const audio = new Audio(`data:audio/mpeg;base64,${audioData.audioContent}`);
+        audio.onended = () => setIsSpeaking(false);
+        await audio.play();
+      } catch (ttsError) {
+        console.error('Text-to-speech error:', ttsError);
+        setIsSpeaking(false);
+      }
 
       toast({
         title: "Outfit Saved!",
