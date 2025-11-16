@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { ChevronRight, ChevronLeft, Sparkles } from 'lucide-react';
 
 export interface QuizAnswers {
+  gender: string;
   style: string;
   colors: string;
   occasions: string;
@@ -19,6 +20,16 @@ interface PersonalizationQuizProps {
 }
 
 const questions = [
+  {
+    id: 'gender',
+    question: "How do you identify?",
+    options: [
+      { value: 'male', label: 'Male' },
+      { value: 'female', label: 'Female' },
+      { value: 'non-binary', label: 'Non-Binary' },
+      { value: 'prefer-not-to-say', label: 'Prefer Not to Say' },
+    ],
+  },
   {
     id: 'style',
     question: "What's your go-to style?",
