@@ -222,7 +222,7 @@ const Index = () => {
               alt="Mira AI Fashion Stylist" 
               className="h-72 w-72 object-contain animate-float hover-scale transition-all duration-500 drop-shadow-elegant"
             />
-            <div className="text-center space-y-3 mb-48">
+            <div className="text-center space-y-3 mb-56">
               <h1 className="text-5xl font-bold bg-gradient-spooky bg-clip-text text-transparent">
                 MiraAI: Your Personal AI Fashion Stylist
               </h1>
