@@ -2,10 +2,11 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Loader2, Sparkles, Mic, MicOff, Image as ImageIcon, X, Video, VideoOff, Camera, Eye, EyeOff, ThumbsUp } from 'lucide-react';
+import { Send, Loader2, Sparkles, Mic, MicOff, Image as ImageIcon, X, Video, VideoOff, Camera, Eye, EyeOff, ThumbsUp, Ear, EarOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { GestureRecognizer, FilesetResolver } from '@mediapipe/tasks-vision';
+import { useWakeWord } from '@/hooks/useWakeWord';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -39,10 +40,14 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
   const [gestureDetected, setGestureDetected] = useState<string | null>(null);
   const [isConversational, setIsConversational] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<Array<{role: string, content: string}>>([]);
+  const [wakeWordEnabled, setWakeWordEnabled] = useState(false);
+  const [continuousMode, setContinuousMode] = useState(false);
+  const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const monitoringIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const recognitionRef = useRef<any>(null);
+  const continuousRecognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const liveVideoRef = useRef<HTMLVideoElement>(null);
@@ -92,6 +97,8 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
   useEffect(() => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+      
+      // Regular recognition for button-triggered voice input
       recognitionRef.current = new SpeechRecognition();
       recognitionRef.current.continuous = false;
       recognitionRef.current.interimResults = false;
@@ -118,6 +125,117 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
       recognitionRef.current.onend = () => {
         setIsListening(false);
       };
+
+      // Continuous recognition for wake word and conversation
+      continuousRecognitionRef.current = new SpeechRecognition();
+      continuousRecognitionRef.current.continuous = true;
+      continuousRecognitionRef.current.interimResults = true;
+      continuousRecognitionRef.current.lang = 'en-US';
+
+      continuousRecognitionRef.current.onresult = async (event: any) => {
+        const lastResultIndex = event.results.length - 1;
+        const transcript = event.results[lastResultIndex][0].transcript.toLowerCase().trim();
+        
+        console.log('Continuous listening:', transcript);
+
+        // Check for wake word
+        if (!continuousMode && (transcript.includes('hi mira') || transcript.includes('hey mira') || transcript.includes('hello mira'))) {
+          console.log('Wake word detected! Starting conversation mode');
+          setContinuousMode(true);
+          setWakeWordEnabled(false);
+          
+          // Speak acknowledgment
+          if (synthRef.current) {
+            synthRef.current.cancel();
+            const utterance = new SpeechSynthesisUtterance("Hi! I'm listening. What would you like to know about your outfit?");
+            utterance.rate = 1.0;
+            const voices = synthRef.current.getVoices();
+            const femaleVoice = voices.find(voice => 
+              voice.name.includes('Female') || voice.name.includes('Samantha')
+            );
+            if (femaleVoice) utterance.voice = femaleVoice;
+            
+            utterance.onend = () => {
+              setIsSpeaking(false);
+              // After greeting, start listening for actual query
+            };
+            utterance.onstart = () => setIsSpeaking(true);
+            synthRef.current.speak(utterance);
+          }
+          
+          toast({
+            title: "Mira Activated",
+            description: "I'm ready to chat! Ask me anything about your outfit.",
+          });
+          return;
+        }
+
+        // In continuous mode, process every complete sentence
+        if (continuousMode && event.results[lastResultIndex].isFinal && !isWaitingForResponse) {
+          const query = transcript.trim();
+          
+          // Exit phrases
+          if (query.includes('bye mira') || query.includes('goodbye mira') || query.includes('stop listening')) {
+            console.log('Exit phrase detected');
+            setContinuousMode(false);
+            setWakeWordEnabled(true);
+            
+            if (synthRef.current) {
+              synthRef.current.cancel();
+              const utterance = new SpeechSynthesisUtterance("Goodbye! Say 'Hi Mira' anytime to chat again.");
+              synthRef.current.speak(utterance);
+            }
+            
+            toast({
+              title: "Chat Ended",
+              description: "Say 'Hi Mira' to start chatting again",
+            });
+            return;
+          }
+
+          // Process the query if it's substantial
+          if (query.length > 5 && !isProcessing) {
+            console.log('Processing query:', query);
+            setIsWaitingForResponse(true);
+            setInputText(query);
+            
+            // Wait for state to update then send
+            setTimeout(async () => {
+              await sendMessage();
+              setIsWaitingForResponse(false);
+            }, 100);
+          }
+        }
+      };
+
+      continuousRecognitionRef.current.onerror = (event: any) => {
+        console.error('Continuous recognition error:', event.error);
+        if (event.error !== 'no-speech' && event.error !== 'aborted') {
+          // Auto-restart on error
+          setTimeout(() => {
+            if ((wakeWordEnabled || continuousMode) && continuousRecognitionRef.current) {
+              try {
+                continuousRecognitionRef.current.start();
+              } catch (e) {
+                console.error('Failed to restart continuous recognition:', e);
+              }
+            }
+          }, 1000);
+        }
+      };
+
+      continuousRecognitionRef.current.onend = () => {
+        // Auto-restart if still in wake word or continuous mode
+        if ((wakeWordEnabled || continuousMode) && continuousRecognitionRef.current) {
+          setTimeout(() => {
+            try {
+              continuousRecognitionRef.current.start();
+            } catch (e) {
+              console.error('Failed to restart:', e);
+            }
+          }, 100);
+        }
+      };
     }
 
     synthRef.current = window.speechSynthesis;
@@ -125,6 +243,9 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
     return () => {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
+      }
+      if (continuousRecognitionRef.current) {
+        continuousRecognitionRef.current.stop();
       }
       if (synthRef.current) {
         synthRef.current.cancel();
@@ -139,7 +260,7 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, []);
+  }, [wakeWordEnabled, continuousMode, isWaitingForResponse, isProcessing]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -152,6 +273,43 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
   useEffect(() => {
     onSpeakingChange(isSpeaking);
   }, [isSpeaking, onSpeakingChange]);
+
+  // Toggle wake word listening
+  const toggleWakeWord = async () => {
+    if (wakeWordEnabled) {
+      // Disable wake word
+      setWakeWordEnabled(false);
+      setContinuousMode(false);
+      if (continuousRecognitionRef.current) {
+        continuousRecognitionRef.current.stop();
+      }
+      toast({
+        title: "Wake Word Disabled",
+        description: "Mira is no longer listening for 'Hi Mira'",
+      });
+    } else {
+      // Enable wake word
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        setWakeWordEnabled(true);
+        
+        if (continuousRecognitionRef.current) {
+          continuousRecognitionRef.current.start();
+        }
+        
+        toast({
+          title: "Wake Word Enabled",
+          description: "Say 'Hi Mira' to start a conversation!",
+        });
+      } catch (error) {
+        toast({
+          title: "Microphone Error",
+          description: "Please allow microphone access.",
+          variant: "destructive"
+        });
+      }
+    }
+  };
 
   const startListening = async () => {
     if (!recognitionRef.current) {
@@ -875,6 +1033,25 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
 
       {/* Input Area */}
       <div className="p-4 border-t border-border">
+        {/* Wake word status indicator */}
+        {(wakeWordEnabled || continuousMode) && (
+          <div className="mb-2 flex items-center justify-center gap-2 text-sm">
+            <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${continuousMode ? 'bg-gradient-fashion text-white' : 'bg-muted text-muted-foreground'}`}>
+              {continuousMode ? (
+                <>
+                  <Mic className="h-3 w-3 animate-pulse" />
+                  <span className="font-medium">Mira is listening... (Say "Bye Mira" to stop)</span>
+                </>
+              ) : (
+                <>
+                  <Ear className="h-3 w-3" />
+                  <span>Listening for "Hi Mira"...</span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+        
         <div className="flex gap-2">
           <input
             ref={fileInputRef}
@@ -884,6 +1061,17 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
             onChange={handleImageUpload}
           />
           
+          <Button
+            size="icon"
+            variant={wakeWordEnabled || continuousMode ? "default" : "outline"}
+            onClick={toggleWakeWord}
+            disabled={isProcessing}
+            className={wakeWordEnabled || continuousMode ? "bg-gradient-fashion" : ""}
+            title={wakeWordEnabled ? "Wake word enabled - Click to disable" : "Enable wake word - Say 'Hi Mira' to start chatting"}
+          >
+            {wakeWordEnabled || continuousMode ? <Ear className="w-4 h-4" /> : <EarOff className="w-4 h-4" />}
+          </Button>
+
           <Button
             size="icon"
             variant="outline"
@@ -907,9 +1095,9 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
             size="icon"
             variant={isListening || (isConversational && isLiveCameraActive) ? "default" : "outline"}
             onClick={isListening ? stopListening : startListening}
-            disabled={isProcessing || (isConversational && !isLiveCameraActive)}
+            disabled={isProcessing || (isConversational && !isLiveCameraActive) || continuousMode}
             className={isListening ? "bg-red-500 hover:bg-red-600" : (isConversational && isLiveCameraActive ? "bg-gradient-fashion animate-pulse" : "")}
-            title={isConversational && isLiveCameraActive ? "Ask me anything about your outfit!" : "Voice input"}
+            title={isConversational && isLiveCameraActive ? "Ask me anything about your outfit!" : continuousMode ? "Using wake word mode" : "Voice input"}
           >
             {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
           </Button>
@@ -918,14 +1106,14 @@ export const UnifiedChatInterface = ({ onShowCamera, onSpeakingChange, onAnalyze
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyPress}
-            placeholder="Type your message..."
-            disabled={isProcessing}
+            placeholder={continuousMode ? "Mira is listening via voice..." : "Type your message..."}
+            disabled={isProcessing || continuousMode}
             className="flex-1"
           />
           
           <Button
             onClick={sendMessage}
-            disabled={(!inputText.trim() && !uploadedImage) || isProcessing}
+            disabled={(!inputText.trim() && !uploadedImage) || isProcessing || continuousMode}
             size="icon"
             className="bg-gradient-fashion hover:opacity-90"
           >
